@@ -19,6 +19,9 @@ app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 ALLOWED_EXTENSIONS = {'txt', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'png', 'jpg', 'jpeg', 'gif'}
 
+# Ensure upload directory exists
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
 def calculate_submission_amount(work_type, quantity, employment_type):
     """Calculate amount based on work type for freelancers"""
     if employment_type != 'freelancer':
@@ -119,6 +122,9 @@ def init_db():
     
     conn.commit()
     conn.close()
+
+# Initialize database on startup
+init_db()
 
 def get_db_connection():
     """Create and return a database connection"""
