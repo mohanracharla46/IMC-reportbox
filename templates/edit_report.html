@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Report - Work Report System{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <div class="header-content">
+            <h1 class="page-title">Edit Report</h1>
+            <p class="page-subtitle">Update your work report submission</p>
+        </div>
+    </div>
+
+    <div class="dashboard-grid">
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Edit Work Report #{{ report['submission_number'] }}</h2>
+                <p class="card-subtitle">Submitted on {{ report['date'] }}
+                    {% if report['created_at'] and ' ' in report['created_at'] %}
+                    at {{ report['created_at'].split(' ')[1].split('.')[0] }}
+                    {% endif %}
+                </p>
+            </div>
+            <form method="POST" action="{{ url_for('edit_report', report_id=report['id']) }}"
+                enctype="multipart/form-data" class="report-form">
+                <div class="form-grid"
+                    style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                    <div class="form-group">
+                        <label for="client_name" class="form-label">Client Name</label>
+                        <input type="text" id="client_name" name="client_name" class="form-input"
+                            value="{{ report['client_name'] or '' }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="work_type" class="form-label">Work Type</label>
+                        <select id="work_type" name="work_type" class="form-input" required>
+                            <option value="Poster" {% if report['work_type']=='Poster' %}selected{% endif %}>Poster
+                            </option>
+                            <option value="Reel" {% if report['work_type']=='Reel' %}selected{% endif %}>Reel</option>
+                            <option value="Video" {% if report['work_type']=='Video' %}selected{% endif %}>Video
+                            </option>
+                            <option value="Web Dev" {% if report['work_type']=='Web Dev' %}selected{% endif %}>Web Dev
+                            </option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-grid"
+                    style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                    <div class="form-group">
+                        <label for="quantity" class="form-label">Quantity / Count</label>
+                        <input type="number" id="quantity" name="quantity" class="form-input"
+                            value="{{ report['quantity'] or 1 }}" min="1" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="work_text" class="form-label">Work Description</label>
+                    <textarea id="work_text" name="work_text" class="form-textarea" rows="6"
+                        required>{{ report['work_text'] }}</textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="file" class="form-label">Update Attachment (Optional)</label>
+                    <div class="file-upload">
+                        <input type="file" id="file" name="file" class="file-input"
+                            accept=".txt,.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif">
+                        <label for="file" class="file-label">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="17 8 12 3 7 8" />
+                                <line x1="12" y1="3" x2="12" y2="15" />
+                            </svg>
+                            <span class="file-text">Choose new file ONLY if replacing existing</span>
+                        </label>
+                    </div>
+                    {% if report['file_path'] %}
+                    <div class="form-help">Current file: <a
+                            href="{{ url_for('download_file', filename=report['file_path'].split('/')[-1]) }}">{{
+                            report['file_path'].split('/')[-1] }}</a></div>
+                    {% else %}
+                    <div class="form-help">No file currently attached</div>
+                    {% endif %}
+                </div>
+
+                <div class="form-group" style="flex-direction: row; gap: var(--spacing-md);">
+                    <button type="submit" class="btn btn-primary">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                            <polyline points="17 21 17 13 7 13 7 21" />
+                            <polyline points="7 3 7 8 15 8" />
+                        </svg>
+                        Update Report
+                    </button>
+                    <a href="{{ url_for('index') }}" class="btn btn-ghost">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

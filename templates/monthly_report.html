@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block title %}{{ employee['name'] }} - {{ month }} Report{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <!-- Header with Navigation -->
+    <div class="dashboard-header">
+        <div class="header-content">
+            <div class="breadcrumb">
+                <a href="{{ url_for('admin_dashboard') }}" class="breadcrumb-link">Dashboard</a>
+                <span class="breadcrumb-separator">›</span>
+                <a href="{{ url_for('view_employee_reports', employee_id=employee['id']) }}" class="breadcrumb-link">{{
+                    employee['name'] }}</a>
+                <span class="breadcrumb-separator">›</span>
+                <span class="breadcrumb-current">{{ month }}</span>
+            </div>
+            <h1 class="page-title">Monthly Report: {{ month }}</h1>
+            <p class="page-subtitle">{{ employee['name'] }} ({{ employee['email'] }})</p>
+        </div>
+        <a href="{{ url_for('download_monthly_report', employee_id=employee['id'], month=month) }}"
+            class="btn btn-primary">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Download Excel
+        </a>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon stat-icon-blue">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                </svg>
+            </div>
+            <div class="stat-content">
+                <div class="stat-label">Total Reports</div>
+                <div class="stat-value">{{ submissions|length }}</div>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon stat-icon-green">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" />
+                    <line x1="8" y1="2" x2="8" y2="6" />
+                    <line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+            </div>
+            <div class="stat-content">
+                <div class="stat-label">Days Submitted</div>
+                <div class="stat-value">{{ submissions|map(attribute='date')|unique|list|length }}</div>
+            </div>
+        </div>
+
+        {% if employee['employment_type'] == 'freelancer' %}
+        <div class="stat-card">
+            <div class="stat-icon" style="background: var(--success-bg); color: var(--success);">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="1" x2="12" y2="23" />
+                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                </svg>
+            </div>
+            <div class="stat-content">
+                <div class="stat-label">Monthly Total</div>
+                <div class="stat-value" style="color: var(--success);">₹{{ total_amount }}</div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="stat-card">
+            <div class="stat-icon stat-icon-purple">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+            </div>
+            <div class="stat-content">
+                <div class="stat-label">With Attachments</div>
+                <div class="stat-value">{{ submissions|selectattr('file_path')|list|length }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Submissions Grouped by Date -->
+    {% if submissions %}
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Work Reports</h2>
+            <p class="card-subtitle">All submissions for {{ month }}</p>
+        </div>
+
+        <div class="monthly-report-content">
+            {% set current_date = namespace(value=None) %}
+            {% for submission in submissions %}
+            {% if submission['date'] != current_date.value %}
+            {% if current_date.value %}
+        </div> <!-- Close previous date-group -->
+    </div> <!-- Close previous date-card -->
+    {% endif %}
+    {% set current_date.value = submission['date'] %}
+
+    <div class="date-card">
+        <div class="date-header">
+            <h3 class="date-title">{{ submission['date'] }}</h3>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <span class="date-count">{{ submissions|selectattr('date', 'equalto', submission['date'])|list|length }}
+                    report(s)</span>
+                {% if employee['employment_type'] == 'freelancer' %}
+                <span class="quantity-badge"
+                    style="background: var(--success-bg); color: var(--success); font-weight: 700;">
+                    Daily Total: ₹{{ daily_totals[submission['date']] }}
+                </span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="date-group">
+            {% endif %}
+
+            <div class="submission-item">
+                <div class="submission-header">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span class="submission-badge"
+                            style="background: var(--primary-700); color: white; padding: 2px 8px; border-radius: 4px; font-weight: 600;">#{{
+                            submission['submission_number'] }}</span>
+                        <span class="client-name" style="font-weight: 700; color: var(--gray-900);">{{
+                            submission['client_name'] or 'N/A' }}</span>
+                        <span class="work-type-badge">{{ submission['work_type'] or 'N/A' }}</span>
+                        <span class="quantity-badge">{{ submission['quantity'] or 1 }}</span>
+                        {% if employee['employment_type'] == 'freelancer' %}
+                        <span class="quantity-badge"
+                            style="background: var(--success-bg); color: var(--success); font-weight: 600;">
+                            ₹{{ calculate_submission_amount(submission['work_type'], submission['quantity'],
+                            employee['employment_type']) }}
+                        </span>
+                        {% endif %}
+                    </div>
+                    <span class="submission-time">
+                        {% if ' ' in submission['created_at'] %}
+                        {{ submission['created_at'].split(' ')[1].split('.')[0] }}
+                        {% else %}
+                        {{ submission['created_at'].split('.')[0] }}
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="submission-content"
+                    style="margin-top: 8px; color: var(--gray-700); background: var(--gray-50); padding: 12px; border-radius: var(--radius-md);">
+                    {{ submission['work_text'] }}
+                </div>
+                {% if submission['file_path'] %}
+                <div class="submission-attachment">
+                    <a href="{{ url_for('download_file', filename=submission['file_path'].split('/')[-1]) }}"
+                        class="file-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path
+                                d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                        </svg>
+                        {{ submission['file_path'].split('/')[-1] }}
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+
+            {% if current_date.value %}
+        </div> <!-- Close last date-group -->
+    </div> <!-- Close last date-card -->
+    {% endif %}
+</div>
+</div>
+{% else %}
+<div class="card">
+    <div class="empty-state">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+        </svg>
+        <h3>No submissions for this month</h3>
+        <p>No work reports were submitted in {{ month }}</p>
+    </div>
+</div>
+{% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Login - Work Report System{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="auth-header">
+            <div class="auth-logo-container">
+                <img src="{{ url_for('static', filename='images/logo.png') }}" alt="IRA MEDIA CONCEPTS"
+                    class="auth-logo-img">
+            </div>
+            <h1 class="auth-title">Welcome Back</h1>
+            <p class="auth-subtitle">Sign in to your account</p>
+        </div>
+
+        <form method="POST" class="auth-form">
+            <div class="form-group">
+                <label for="email" class="form-label">Email Address</label>
+                <input type="email" id="email" name="email" class="form-input" placeholder="you@company.com" required
+                    autofocus>
+            </div>
+
+            <div class="form-group">
+                <label for="password" class="form-label">Password</label>
+                <input type="password" id="password" name="password" class="form-input" placeholder="••••••••" required>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-full">
+                Sign In
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M5 12h14" />
+                    <path d="m12 5 7 7-7 7" />
+                </svg>
+            </button>
+        </form>
+
+        <div class="auth-footer">
+            <!-- <div class="demo-credentials">
+                <div class="demo-label">Demo Credentials</div>
+                <div class="demo-grid">
+                    <div class="demo-item">
+                        <strong>Admin:</strong><br>
+                        <code>prashanth@iramediaconcepts.com</code><br>
+                        <code>admin123</code>
+                    </div>
+                    <div class="demo-item">
+                        <strong>Employee:</strong><br>
+                        <code>john@company.com</code><br>
+                        <code>password123</code>
+                    </div>
+                </div>
+            </div> -->
+        </div>
+    </div>
+
+    <div class="auth-decoration">
+        <div class="decoration-circle circle-1"></div>
+        <div class="decoration-circle circle-2"></div>
+        <div class="decoration-circle circle-3"></div>
+    </div>
+</div>
+{% endblock %}
