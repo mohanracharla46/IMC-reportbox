@@ -110,16 +110,11 @@ The application will start and display:
 Work Report Management System
 ==============================================================
 
-Default Login Credentials:
+Default Login Details:
 --------------------------------------------------------------
 Admin:
-  Email: admin@company.com
+  Email: prashanth@iramediaconcepts.com
   Password: admin123
-
-Employees:
-  john@company.com / password123
-  jane@company.com / password123
-  bob@company.com / password123
 ==============================================================
 
  * Running on http://0.0.0.0:5000
@@ -135,13 +130,8 @@ http://localhost:5000
 ## 🔐 Default Login Credentials
 
 ### Admin Account
-- **Email**: admin@company.com
+- **Email**: prashanth@iramediaconcepts.com
 - **Password**: admin123
-
-### Employee Accounts
-- **John Doe**: john@company.com / password123
-- **Jane Smith**: jane@company.com / password123
-- **Bob Johnson**: bob@company.com / password123
 
 > ⚠️ **Security Note**: Change these default passwords in production!
 

@@ -105,21 +105,7 @@ def init_db():
             ('prashanth@iramediaconcepts.com', 'Prashanth', 'admin', 'admin@company.com')
         )
     
-    # Create sample employees if not exists
-    cursor.execute('SELECT COUNT(*) FROM users WHERE role = ?', ('employee',))
-    if cursor.fetchone()[0] == 0:
-        employees = [
-            ('John Doe', 'john@company.com', 'password123'),
-            ('Jane Smith', 'jane@company.com', 'password123'),
-            ('Bob Johnson', 'bob@company.com', 'password123')
-        ]
-        for name, email, password in employees:
-            hashed_pw = generate_password_hash(password)
-            cursor.execute(
-                'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
-                (name, email, hashed_pw, 'employee')
-            )
-    
+    # Database initialization is now cleaner without sample employees
     conn.commit()
     conn.close()
 
@@ -910,15 +896,10 @@ if __name__ == '__main__':
     print("\n" + "="*60)
     print("Work Report Management System")
     print("="*60)
-    print("\nDefault Login Credentials:")
+    print("\nAdmin Login Details:")
     print("-" * 60)
-    print("Admin:")
     print("  Email: prashanth@iramediaconcepts.com")
     print("  Password: admin123")
-    print("\nEmployees:")
-    print("  john@company.com / password123")
-    print("  jane@company.com / password123")
-    print("  bob@company.com / password123")
     print("="*60 + "\n")
     
     # Run the Flask app

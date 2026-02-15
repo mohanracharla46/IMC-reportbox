@@ -60,9 +60,7 @@ The Work Report System uses SQLite as its database engine. The database consists
 **Sample Data**:
 ```sql
 INSERT INTO users (name, email, password, role) VALUES
-('Admin User', 'admin@company.com', 'hashed_password', 'admin'),
-('John Doe', 'john@company.com', 'hashed_password', 'employee'),
-('Jane Smith', 'jane@company.com', 'hashed_password', 'employee');
+('Prashanth', 'prashanth@iramediaconcepts.com', 'hashed_password', 'admin');
 ```
 
 ### Submissions Table
