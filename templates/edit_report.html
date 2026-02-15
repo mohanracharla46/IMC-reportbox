@@ -16,8 +16,8 @@
             <div class="card-header">
                 <h2 class="card-title">Edit Work Report #{{ report['submission_number'] }}</h2>
                 <p class="card-subtitle">Submitted on {{ report['date'] }}
-                    {% if report['created_at'] and ' ' in report['created_at'] %}
-                    at {{ report['created_at'].split(' ')[1].split('.')[0] }}
+                    {% if report['created_at'] %}
+                    at {{ report['created_at']|format_dt(only_time=True) }}
                     {% endif %}
                 </p>
             </div>
@@ -76,8 +76,8 @@
                     </div>
                     {% if report['file_path'] %}
                     <div class="form-help">Current file: <a
-                            href="{{ url_for('download_file', filename=report['file_path'].split('/')[-1]) }}">{{
-                            report['file_path'].split('/')[-1] }}</a></div>
+                            href="{{ url_for('download_file', filename=report['file_path']|filename) }}">{{
+                            report['file_path']|filename }}</a></div>
                     {% else %}
                     <div class="form-help">No file currently attached</div>
                     {% endif %}

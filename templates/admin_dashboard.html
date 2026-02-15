@@ -188,7 +188,7 @@
                             </td>
                             <td>
                                 {% if submission['file_path'] %}
-                                <a href="{{ url_for('download_file', filename=submission['file_path'].split('/')[-1]) }}"
+                                <a href="{{ url_for('download_file', filename=submission['file_path']|filename) }}"
                                     class="file-link">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2">
@@ -203,7 +203,7 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <span class="time-text">{{ submission['created_at'].split('.')[0] }}</span>
+                                <span class="time-text">{{ submission['created_at']|format_dt }}</span>
                             </td>
                             <td>
                                 <div style="display: flex; gap: 5px;">

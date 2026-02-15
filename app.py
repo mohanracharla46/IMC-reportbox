@@ -44,7 +44,36 @@ def calculate_submission_amount(work_type, quantity, employment_type):
         
     return rate * qty
 
+def format_datetime_filter(value, only_time=False):
+    """Safe formatting for created_at (works for string and datetime)"""
+    if not value:
+        return ""
+    
+    # If it's already a string (SQLite)
+    if isinstance(value, str):
+        # Remove milliseconds if present
+        val = value.split('.')[0]
+        if only_time and ' ' in val:
+            return val.split(' ')[1]
+        return val
+        
+    # If it's a datetime/date object (Postgres)
+    if hasattr(value, 'strftime'):
+        if only_time:
+            return value.strftime("%H:%M:%S")
+        return value.strftime("%Y-%m-%d %H:%M:%S")
+        
+    return str(value)
+
+def get_filename_filter(file_path):
+    """Extract filename from path safely"""
+    if not file_path:
+        return ""
+    return os.path.basename(file_path)
+
 app.jinja_env.globals.update(calculate_submission_amount=calculate_submission_amount)
+app.jinja_env.filters['format_dt'] = format_datetime_filter
+app.jinja_env.filters['filename'] = get_filename_filter
 
 # Database helper
 def get_db_info():

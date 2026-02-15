@@ -143,11 +143,7 @@
                         {% endif %}
                     </div>
                     <span class="submission-time">
-                        {% if ' ' in submission['created_at'] %}
-                        {{ submission['created_at'].split(' ')[1].split('.')[0] }}
-                        {% else %}
-                        {{ submission['created_at'].split('.')[0] }}
-                        {% endif %}
+                        {{ submission['created_at']|format_dt(only_time=True) }}
                     </span>
                 </div>
                 <div class="submission-content"
@@ -156,14 +152,14 @@
                 </div>
                 {% if submission['file_path'] %}
                 <div class="submission-attachment">
-                    <a href="{{ url_for('download_file', filename=submission['file_path'].split('/')[-1]) }}"
+                    <a href="{{ url_for('download_file', filename=submission['file_path']|filename) }}"
                         class="file-link">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2">
                             <path
                                 d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
                         </svg>
-                        {{ submission['file_path'].split('/')[-1] }}
+                        {{ submission['file_path']|filename }}
                     </a>
                 </div>
                 {% endif %}
