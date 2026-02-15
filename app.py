@@ -183,10 +183,14 @@ def login():
             return render_template('login.html')
         
         conn = get_db_connection()
-        user = conn.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
+        user = conn.execute('SELECT * FROM users WHERE email = ?', (email.strip(),)).fetchone()
         conn.close()
         
-        if user and check_password_hash(user['password'], password):
+        if not user:
+            flash('No user found with this email address.', 'error')
+        elif not check_password_hash(user['password'], password):
+            flash('Incorrect password. Please try again.', 'error')
+        else:
             session['user_id'] = user['id']
             session['user_name'] = user['name']
             session['role'] = user['role']
@@ -196,8 +200,6 @@ def login():
             if user['role'] == 'admin':
                 return redirect(url_for('admin_dashboard'))
             return redirect(url_for('employee_dashboard'))
-        else:
-            flash('Invalid email or password.', 'error')
     
     return render_template('login.html')
 
@@ -403,15 +405,18 @@ def add_employee():
         return redirect(url_for('admin_dashboard'))
     
     # Insert new employee
-    hashed_password = generate_password_hash(password)
-    conn.execute(
-        'INSERT INTO users (name, email, password, role, employment_type) VALUES (?, ?, ?, ?, ?)',
-        (name, email, hashed_password, 'employee', employment_type)
-    )
-    conn.commit()
-    conn.close()
-    
-    flash(f'Employee {name} added successfully!', 'success')
+    try:
+        hashed_password = generate_password_hash(password)
+        conn.execute(
+            'INSERT INTO users (name, email, password, role, employment_type) VALUES (?, ?, ?, ?, ?)',
+            (name, email, hashed_password, 'employee', employment_type)
+        )
+        conn.commit()
+        flash(f'Employee {name} added successfully!', 'success')
+    except Exception as e:
+        flash(f'Error adding employee: {str(e)}', 'error')
+    finally:
+        conn.close()
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/employee/edit/<int:employee_id>', methods=['POST'])
@@ -437,23 +442,33 @@ def edit_employee(employee_id):
         conn.close()
         return redirect(url_for('admin_dashboard'))
     
+    # Check if new email is already taken by another user
+    if email != employee['email']:
+        existing = conn.execute('SELECT * FROM users WHERE email = ? AND id != ?', (email, employee_id)).fetchone()
+        if existing:
+            flash('Email already in use by another employee.', 'error')
+            conn.close()
+            return redirect(url_for('admin_dashboard'))
+
     # Update employee
-    if password:
-        hashed_password = generate_password_hash(password)
-        conn.execute(
-            'UPDATE users SET name = ?, email = ?, password = ?, employment_type = ? WHERE id = ?',
-            (name, email, hashed_password, employment_type, employee_id)
-        )
-    else:
-        conn.execute(
-            'UPDATE users SET name = ?, email = ?, employment_type = ? WHERE id = ?',
-            (name, email, employment_type, employee_id)
-        )
-    
-    conn.commit()
-    conn.close()
-    
-    flash(f'Employee {name} updated successfully!', 'success')
+    try:
+        if password:
+            hashed_password = generate_password_hash(password)
+            conn.execute(
+                'UPDATE users SET name = ?, email = ?, password = ?, employment_type = ? WHERE id = ?',
+                (name, email, hashed_password, employment_type, employee_id)
+            )
+        else:
+            conn.execute(
+                'UPDATE users SET name = ?, email = ?, employment_type = ? WHERE id = ?',
+                (name, email, employment_type, employee_id)
+            )
+        conn.commit()
+        flash(f'Employee {name} updated successfully!', 'success')
+    except Exception as e:
+        flash(f'Error updating employee: {str(e)}', 'error')
+    finally:
+        conn.close()
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/employee/delete/<int:employee_id>', methods=['POST'])
