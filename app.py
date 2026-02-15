@@ -596,7 +596,13 @@ def view_employee_reports(employee_id):
     
     monthly_stats = []
     for stat in monthly_stats_raw:
-        month_submissions = [s for s in submissions if s['date'].startswith(stat['month'])]
+        # Filter submissions for this month - handle both string and date object
+        month_submissions = []
+        for s in submissions:
+            s_date = s['date'].isoformat() if hasattr(s['date'], 'isoformat') else str(s['date'])
+            if s_date.startswith(stat['month']):
+                month_submissions.append(s)
+                
         total_amount = sum(calculate_submission_amount(s['work_type'], s['quantity'], employee['employment_type']) for s in month_submissions)
         
         monthly_stats.append({
@@ -645,7 +651,8 @@ def view_monthly_report(employee_id):
     # Calculate daily totals for freelancers
     daily_totals = {}
     for s in submissions:
-        d = s['date']
+        # Use string as key for consistency across DB types
+        d = s['date'].isoformat() if hasattr(s['date'], 'isoformat') else str(s['date'])
         if d not in daily_totals:
             daily_totals[d] = 0
         daily_totals[d] += calculate_submission_amount(s['work_type'], s['quantity'], employee['employment_type'])

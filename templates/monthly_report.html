@@ -116,7 +116,7 @@
                 {% if employee['employment_type'] == 'freelancer' %}
                 <span class="quantity-badge"
                     style="background: var(--success-bg); color: var(--success); font-weight: 700;">
-                    Daily Total: ₹{{ daily_totals[submission['date']] }}
+                    Daily Total: ₹{{ daily_totals[submission['date']|string] }}
                 </span>
                 {% endif %}
             </div>
