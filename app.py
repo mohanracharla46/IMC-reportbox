@@ -15,6 +15,7 @@ import os
 import pandas as pd
 from io import BytesIO
 import urllib.parse as urlparse
+import re
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-in-production'  # Change this in production!
@@ -113,8 +114,7 @@ def init_db():
         try:
             cursor.execute(f'ALTER TABLE {table} ADD COLUMN {column} {definition}')
         except (sqlite3.OperationalError, psycopg2.Error):
-            if q == '%s': conn.rollback()
-            pass
+            pass # Usually means column already exists
     
     # Create default admin if not exists
     cursor.execute(f'SELECT * FROM users WHERE role = {q}', ('admin',))
@@ -155,7 +155,6 @@ def execute_query(conn, query, params=None):
         query = query.replace('?', '%s')
         # Robust strftime translation
         if 'strftime' in query:
-            import re
             # Replaces strftime('%Y-%m', col) or strftime("%Y-%m", col) with TO_CHAR(col, 'YYYY-MM')
             query = re.sub(r"strftime\(['\"]%Y-%m['\"],\s*(\w+\.?\w+)\)", r"TO_CHAR(\1, 'YYYY-MM')", query)
         
