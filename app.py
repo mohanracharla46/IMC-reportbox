@@ -62,8 +62,8 @@ def init_db():
     
     if q == '%s':
         conn = psycopg2.connect(db_url)
+        conn.autocommit = True
         cursor = conn.cursor()
-        # Postgres uses SERIAL for autoincrement
         id_type = "SERIAL PRIMARY KEY"
         check_constraint_role = "CHECK(role IN ('employee', 'admin'))"
         check_constraint_type = "CHECK(employment_type IN ('inhouse', 'freelancer'))"
@@ -104,17 +104,17 @@ def init_db():
     ''')
     
     # Add columns to existing tables if they don't exist
-    try:
-        cursor.execute(f'ALTER TABLE users ADD COLUMN employment_type TEXT DEFAULT "inhouse"')
-    except (sqlite3.OperationalError, psycopg2.Error):
-        pass # Column already exists
-        
-    try:
-        cursor.execute(f'ALTER TABLE submissions ADD COLUMN client_name TEXT')
-        cursor.execute(f'ALTER TABLE submissions ADD COLUMN work_type TEXT')
-        cursor.execute(f'ALTER TABLE submissions ADD COLUMN quantity INTEGER DEFAULT 1')
-    except (sqlite3.OperationalError, psycopg2.Error):
-        pass # Columns already exist
+    for column, table, definition in [
+        ('employment_type', 'users', 'TEXT DEFAULT "inhouse"'),
+        ('client_name', 'submissions', 'TEXT'),
+        ('work_type', 'submissions', 'TEXT'),
+        ('quantity', 'submissions', 'INTEGER DEFAULT 1')
+    ]:
+        try:
+            cursor.execute(f'ALTER TABLE {table} ADD COLUMN {column} {definition}')
+        except (sqlite3.OperationalError, psycopg2.Error):
+            if q == '%s': conn.rollback()
+            pass
     
     # Create default admin if not exists
     cursor.execute(f'SELECT * FROM users WHERE role = {q}', ('admin',))
@@ -125,7 +125,6 @@ def init_db():
             ('Prashanth', 'prashanth@iramediaconcepts.com', admin_password, 'admin', 'inhouse')
         )
     else:
-        # Update existing admin email if it's the old default
         cursor.execute(
             f'UPDATE users SET email = {q}, name = {q} WHERE role = {q} AND email = {q}',
             ('prashanth@iramediaconcepts.com', 'Prashanth', 'admin', 'admin@company.com')
@@ -142,7 +141,6 @@ def get_db_connection():
     db_url, q = get_db_info()
     if q == '%s':
         conn = psycopg2.connect(db_url)
-        # In Postgres, we use RealDictCursor to mimic sqlite3.Row
         conn.autocommit = True
         return conn
     else:
@@ -154,13 +152,12 @@ def execute_query(conn, query, params=None):
     """Helper to execute query correctly regardless of DB type"""
     _, q = get_db_info()
     if q == '%s':
-        # Replace ? with %s for Postgres
         query = query.replace('?', '%s')
-        # Replace strftime with TO_CHAR for Postgres
+        # Robust strftime translation
         if 'strftime' in query:
-            # Simple replacement for common patterns used in this app
-            query = query.replace("strftime('%Y-%m', date)", "TO_CHAR(date, 'YYYY-MM')")
-            query = query.replace("strftime('%Y-%m', s.date)", "TO_CHAR(s.date, 'YYYY-MM')")
+            import re
+            # Replaces strftime('%Y-%m', col) or strftime("%Y-%m", col) with TO_CHAR(col, 'YYYY-MM')
+            query = re.sub(r"strftime\(['\"]%Y-%m['\"],\s*(\w+\.?\w+)\)", r"TO_CHAR(\1, 'YYYY-MM')", query)
         
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         cursor.execute(query, params or ())
