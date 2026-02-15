@@ -9,9 +9,12 @@ from werkzeug.utils import secure_filename
 from functools import wraps
 from datetime import datetime, date
 import sqlite3
+import psycopg2
+from psycopg2.extras import RealDictCursor
 import os
 import pandas as pd
 from io import BytesIO
+import urllib.parse as urlparse
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-in-production'  # Change this in production!
@@ -42,28 +45,51 @@ def calculate_submission_amount(work_type, quantity, employment_type):
 
 app.jinja_env.globals.update(calculate_submission_amount=calculate_submission_amount)
 
+# Database helper
+def get_db_info():
+    """Get database connection info and placeholder type"""
+    db_url = os.environ.get('DATABASE_URL')
+    if db_url:
+        if db_url.startswith("postgres://"):
+            db_url = db_url.replace("postgres://", "postgresql://", 1)
+        return db_url, '%s'
+    return 'work_reports.db', '?'
+
 # Database initialization
 def init_db():
-    """Initialize the SQLite database with required tables"""
-    conn = sqlite3.connect('work_reports.db')
-    cursor = conn.cursor()
+    """Initialize the database with required tables"""
+    db_url, q = get_db_info()
     
+    if q == '%s':
+        conn = psycopg2.connect(db_url)
+        cursor = conn.cursor()
+        # Postgres uses SERIAL for autoincrement
+        id_type = "SERIAL PRIMARY KEY"
+        check_constraint_role = "CHECK(role IN ('employee', 'admin'))"
+        check_constraint_type = "CHECK(employment_type IN ('inhouse', 'freelancer'))"
+    else:
+        conn = sqlite3.connect(db_url)
+        cursor = conn.cursor()
+        id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
+        check_constraint_role = "CHECK(role IN ('employee', 'admin'))"
+        check_constraint_type = "CHECK(employment_type IN ('inhouse', 'freelancer'))"
+
     # Create users table
-    cursor.execute('''
+    cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id {id_type},
             name TEXT NOT NULL,
             email TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL,
-            role TEXT NOT NULL CHECK(role IN ('employee', 'admin')),
-            employment_type TEXT DEFAULT 'inhouse' CHECK(employment_type IN ('inhouse', 'freelancer'))
+            role TEXT NOT NULL {check_constraint_role},
+            employment_type TEXT DEFAULT 'inhouse' {check_constraint_type}
         )
     ''')
     
     # Create submissions table
-    cursor.execute('''
+    cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS submissions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id {id_type},
             user_id INTEGER NOT NULL,
             work_text TEXT NOT NULL,
             client_name TEXT,
@@ -79,33 +105,32 @@ def init_db():
     
     # Add columns to existing tables if they don't exist
     try:
-        cursor.execute('ALTER TABLE users ADD COLUMN employment_type TEXT DEFAULT "inhouse"')
-    except sqlite3.OperationalError:
+        cursor.execute(f'ALTER TABLE users ADD COLUMN employment_type TEXT DEFAULT "inhouse"')
+    except (sqlite3.OperationalError, psycopg2.Error):
         pass # Column already exists
         
     try:
-        cursor.execute('ALTER TABLE submissions ADD COLUMN client_name TEXT')
-        cursor.execute('ALTER TABLE submissions ADD COLUMN work_type TEXT')
-        cursor.execute('ALTER TABLE submissions ADD COLUMN quantity INTEGER DEFAULT 1')
-    except sqlite3.OperationalError:
+        cursor.execute(f'ALTER TABLE submissions ADD COLUMN client_name TEXT')
+        cursor.execute(f'ALTER TABLE submissions ADD COLUMN work_type TEXT')
+        cursor.execute(f'ALTER TABLE submissions ADD COLUMN quantity INTEGER DEFAULT 1')
+    except (sqlite3.OperationalError, psycopg2.Error):
         pass # Columns already exist
     
     # Create default admin if not exists
-    cursor.execute('SELECT * FROM users WHERE role = ?', ('admin',))
+    cursor.execute(f'SELECT * FROM users WHERE role = {q}', ('admin',))
     if not cursor.fetchone():
         admin_password = generate_password_hash('admin123')
         cursor.execute(
-            'INSERT INTO users (name, email, password, role, employment_type) VALUES (?, ?, ?, ?, ?)',
+            f'INSERT INTO users (name, email, password, role, employment_type) VALUES ({q}, {q}, {q}, {q}, {q})',
             ('Prashanth', 'prashanth@iramediaconcepts.com', admin_password, 'admin', 'inhouse')
         )
     else:
         # Update existing admin email if it's the old default
         cursor.execute(
-            'UPDATE users SET email = ?, name = ? WHERE role = ? AND email = ?',
+            f'UPDATE users SET email = {q}, name = {q} WHERE role = {q} AND email = {q}',
             ('prashanth@iramediaconcepts.com', 'Prashanth', 'admin', 'admin@company.com')
         )
     
-    # Database initialization is now cleaner without sample employees
     conn.commit()
     conn.close()
 
@@ -114,9 +139,34 @@ init_db()
 
 def get_db_connection():
     """Create and return a database connection"""
-    conn = sqlite3.connect('work_reports.db')
-    conn.row_factory = sqlite3.Row
-    return conn
+    db_url, q = get_db_info()
+    if q == '%s':
+        conn = psycopg2.connect(db_url)
+        # In Postgres, we use RealDictCursor to mimic sqlite3.Row
+        conn.autocommit = True
+        return conn
+    else:
+        conn = sqlite3.connect(db_url)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+def execute_query(conn, query, params=None):
+    """Helper to execute query correctly regardless of DB type"""
+    _, q = get_db_info()
+    if q == '%s':
+        # Replace ? with %s for Postgres
+        query = query.replace('?', '%s')
+        # Replace strftime with TO_CHAR for Postgres
+        if 'strftime' in query:
+            # Simple replacement for common patterns used in this app
+            query = query.replace("strftime('%Y-%m', date)", "TO_CHAR(date, 'YYYY-MM')")
+            query = query.replace("strftime('%Y-%m', s.date)", "TO_CHAR(s.date, 'YYYY-MM')")
+        
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute(query, params or ())
+        return cursor
+    else:
+        return conn.execute(query, params or ())
 
 def allowed_file(filename):
     """Check if uploaded file has an allowed extension"""
@@ -169,7 +219,7 @@ def login():
             return render_template('login.html')
         
         conn = get_db_connection()
-        user = conn.execute('SELECT * FROM users WHERE email = ?', (email.strip(),)).fetchone()
+        user = execute_query(conn, 'SELECT * FROM users WHERE email = ?', (email.strip(),)).fetchone()
         conn.close()
         
         if not user:
@@ -209,7 +259,7 @@ def employee_dashboard():
     
     # Check if submitted today and count submissions
     today = date.today().isoformat()
-    submissions_today = conn.execute(
+    submissions_today = execute_query(conn, 
         'SELECT * FROM submissions WHERE user_id = ? AND date = ? ORDER BY created_at DESC',
         (session['user_id'], today)
     ).fetchall()
@@ -217,7 +267,7 @@ def employee_dashboard():
     submission_count_today = len(submissions_today)
     
     # Get recent submissions (last 20 to show more)
-    recent_submissions = [dict(row) for row in conn.execute(
+    recent_submissions = [dict(row) for row in execute_query(conn, 
         'SELECT * FROM submissions WHERE user_id = ? ORDER BY date DESC, created_at DESC LIMIT 20',
         (session['user_id'],)
     ).fetchall()]
@@ -266,16 +316,17 @@ def submit_report():
     conn = get_db_connection()
     
     # Get submission count for today to set submission_number
-    submission_count = conn.execute(
+    res = execute_query(conn, 
         'SELECT COUNT(*) as count FROM submissions WHERE user_id = ? AND date = ?',
         (session['user_id'], today)
-    ).fetchone()['count']
+    ).fetchone()
+    submission_count = res['count']
     
     submission_number = submission_count + 1
     
     # Insert new submission
     try:
-        conn.execute(
+        execute_query(conn, 
             'INSERT INTO submissions (user_id, work_text, client_name, work_type, quantity, file_path, date, submission_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
             (session['user_id'], work_text, client_name, work_type, quantity, file_path, today, submission_number)
         )
@@ -317,15 +368,15 @@ def admin_dashboard():
     
     query += ' ORDER BY s.date DESC, s.created_at DESC'
     
-    submissions = [dict(row) for row in conn.execute(query, params).fetchall()]
+    submissions = [dict(row) for row in execute_query(conn, query, params).fetchall()]
     
     # Get all employees and freelancers separately
-    employees = [dict(row) for row in conn.execute(
+    employees = [dict(row) for row in execute_query(conn, 
         'SELECT * FROM users WHERE role = ? AND employment_type = ? ORDER BY name',
         ('employee', 'inhouse')
     ).fetchall()]
     
-    freelancers = [dict(row) for row in conn.execute(
+    freelancers = [dict(row) for row in execute_query(conn, 
         'SELECT * FROM users WHERE role = ? AND employment_type = ? ORDER BY name',
         ('employee', 'freelancer')
     ).fetchall()]
@@ -336,7 +387,7 @@ def admin_dashboard():
     for f in freelancers:
         f_dict = dict(f)
         # Get all submissions for this freelancer for the current month
-        f_submissions = conn.execute(
+        f_submissions = execute_query(conn, 
             'SELECT work_type, quantity FROM submissions WHERE user_id = ? AND strftime("%Y-%m", date) = ?',
             (f['id'], current_month)
         ).fetchall()
@@ -346,9 +397,9 @@ def admin_dashboard():
         freelancers_with_amounts.append(f_dict)
     
     # Get statistics
-    total_submissions = conn.execute('SELECT COUNT(*) as count FROM submissions').fetchone()['count']
+    total_submissions = execute_query(conn, 'SELECT COUNT(*) as count FROM submissions').fetchone()['count']
     total_employees = len(employees)
-    today_submissions = conn.execute(
+    today_submissions = execute_query(conn, 
         'SELECT COUNT(*) as count FROM submissions WHERE date = ?',
         (date.today().isoformat(),)
     ).fetchone()['count']
@@ -384,7 +435,7 @@ def add_employee():
     conn = get_db_connection()
     
     # Check if email already exists
-    existing = conn.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
+    existing = execute_query(conn, 'SELECT * FROM users WHERE email = ?', (email,)).fetchone()
     if existing:
         flash('Email already exists.', 'error')
         conn.close()
@@ -393,7 +444,7 @@ def add_employee():
     # Insert new employee
     try:
         hashed_password = generate_password_hash(password)
-        conn.execute(
+        execute_query(conn, 
             'INSERT INTO users (name, email, password, role, employment_type) VALUES (?, ?, ?, ?, ?)',
             (name, email, hashed_password, 'employee', employment_type)
         )
@@ -421,7 +472,7 @@ def edit_employee(employee_id):
     conn = get_db_connection()
     
     # Check if employee exists
-    employee = conn.execute('SELECT * FROM users WHERE id = ? AND role = ?', 
+    employee = execute_query(conn, 'SELECT * FROM users WHERE id = ? AND role = ?', 
                            (employee_id, 'employee')).fetchone()
     if not employee:
         flash('Employee not found.', 'error')
@@ -430,7 +481,7 @@ def edit_employee(employee_id):
     
     # Check if new email is already taken by another user
     if email != employee['email']:
-        existing = conn.execute('SELECT * FROM users WHERE email = ? AND id != ?', (email, employee_id)).fetchone()
+        existing = execute_query(conn, 'SELECT * FROM users WHERE email = ? AND id != ?', (email, employee_id)).fetchone()
         if existing:
             flash('Email already in use by another employee.', 'error')
             conn.close()
@@ -440,12 +491,12 @@ def edit_employee(employee_id):
     try:
         if password:
             hashed_password = generate_password_hash(password)
-            conn.execute(
+            execute_query(conn, 
                 'UPDATE users SET name = ?, email = ?, password = ?, employment_type = ? WHERE id = ?',
                 (name, email, hashed_password, employment_type, employee_id)
             )
         else:
-            conn.execute(
+            execute_query(conn, 
                 'UPDATE users SET name = ?, email = ?, employment_type = ? WHERE id = ?',
                 (name, email, employment_type, employee_id)
             )
@@ -464,7 +515,7 @@ def delete_employee(employee_id):
     conn = get_db_connection()
     
     # Check if employee exists
-    employee = conn.execute('SELECT * FROM users WHERE id = ? AND role = ?',
+    employee = execute_query(conn, 'SELECT * FROM users WHERE id = ? AND role = ?',
                            (employee_id, 'employee')).fetchone()
     if not employee:
         flash('Employee not found.', 'error')
@@ -472,7 +523,7 @@ def delete_employee(employee_id):
         return redirect(url_for('admin_dashboard'))
     
     # Delete employee (submissions will be deleted due to CASCADE)
-    conn.execute('DELETE FROM users WHERE id = ?', (employee_id,))
+    execute_query(conn, 'DELETE FROM users WHERE id = ?', (employee_id,))
     conn.commit()
     conn.close()
     
@@ -492,14 +543,14 @@ def view_employee_reports(employee_id):
     conn = get_db_connection()
     
     # Get employee details
-    employee = conn.execute('SELECT * FROM users WHERE id = ?', (employee_id,)).fetchone()
+    employee = execute_query(conn, 'SELECT * FROM users WHERE id = ?', (employee_id,)).fetchone()
     if not employee:
         flash('Employee not found.', 'error')
         conn.close()
         return redirect(url_for('admin_dashboard'))
     
     # Get all submissions for this employee
-    submissions = [dict(row) for row in conn.execute(
+    submissions = [dict(row) for row in execute_query(conn, 
         '''SELECT * FROM submissions 
            WHERE user_id = ? 
            ORDER BY date DESC, created_at DESC''',
@@ -507,7 +558,7 @@ def view_employee_reports(employee_id):
     ).fetchall()]
     
     # Group submissions by month for statistics
-    monthly_stats_raw = conn.execute(
+    monthly_stats_raw = execute_query(conn, 
         '''SELECT strftime('%Y-%m', date) as month, 
            COUNT(*) as count,
            COUNT(DISTINCT date) as days_submitted
@@ -552,14 +603,14 @@ def view_monthly_report(employee_id):
     conn = get_db_connection()
     
     # Get employee details
-    employee = conn.execute('SELECT * FROM users WHERE id = ?', (employee_id,)).fetchone()
+    employee = execute_query(conn, 'SELECT * FROM users WHERE id = ?', (employee_id,)).fetchone()
     if not employee:
         flash('Employee not found.', 'error')
         conn.close()
         return redirect(url_for('admin_dashboard'))
     
     # Get submissions for the specified month
-    submissions = [dict(row) for row in conn.execute(
+    submissions = [dict(row) for row in execute_query(conn, 
         '''SELECT * FROM submissions 
            WHERE user_id = ? AND strftime('%Y-%m', date) = ?
            ORDER BY date ASC, created_at ASC''',
@@ -607,7 +658,7 @@ def download_monthly_report(employee_id):
     conn = get_db_connection()
     
     # Get employee details
-    employee = conn.execute('SELECT * FROM users WHERE id = ?', (employee_id,)).fetchone()
+    employee = execute_query(conn, 'SELECT * FROM users WHERE id = ?', (employee_id,)).fetchone()
     if not employee:
         flash('Employee not found.', 'error')
         conn.close()
@@ -615,18 +666,24 @@ def download_monthly_report(employee_id):
     
     # Get submissions for the specified month
     query = '''
-        SELECT s.date as 'Date', 
-               s.submission_number as 'Submission #',
-               s.client_name as 'Client',
-               s.work_type as 'Work Type',
-               s.quantity as 'Qty',
-               s.work_text as 'Description',
-               s.created_at as 'Submitted At'
+        SELECT s.date as "Date", 
+               s.submission_number as "Submission #",
+               s.client_name as "Client",
+               s.work_type as "Work Type",
+               s.quantity as "Qty",
+               s.work_text as "Description",
+               s.created_at as "Submitted At"
         FROM submissions s 
         WHERE s.user_id = ? AND strftime('%Y-%m', s.date) = ?
         ORDER BY s.date ASC, s.created_at ASC
     '''
-    df = pd.read_sql_query(query, conn, params=(employee_id, month))
+    # Replace placeholders for pd.read_sql_query
+    _, q = get_db_info()
+    df_query = query.replace('?', q)
+    if q == '%s':
+        df_query = df_query.replace("strftime('%Y-%m', s.date)", "TO_CHAR(s.date, 'YYYY-MM')")
+        
+    df = pd.read_sql_query(df_query, conn, params=(employee_id, month))
     conn.close()
     
     if df.empty:
@@ -694,14 +751,14 @@ def download_filtered_reports():
     conn = get_db_connection()
     
     query = '''
-        SELECT u.name as 'Employee Name',
-               u.employment_type as 'Type',
-               s.date as 'Date', 
-               s.client_name as 'Client',
-               s.work_type as 'Work Type',
-               s.quantity as 'Qty',
-               s.work_text as 'Description',
-               s.created_at as 'Submitted At'
+        SELECT u.name as "Employee Name",
+               u.employment_type as "Type",
+               s.date as "Date", 
+               s.client_name as "Client",
+               s.work_type as "Work Type",
+               s.quantity as "Qty",
+               s.work_text as "Description",
+               s.created_at as "Submitted At"
         FROM submissions s
         JOIN users u ON s.user_id = u.id
         WHERE 1=1
@@ -718,7 +775,11 @@ def download_filtered_reports():
     
     query += ' ORDER BY s.date DESC, s.created_at DESC'
     
-    df = pd.read_sql_query(query, conn, params=params)
+    # Replace placeholders for pd.read_sql_query
+    _, q = get_db_info()
+    df_query = query.replace('?', q)
+    
+    df = pd.read_sql_query(df_query, conn, params=params)
     conn.close()
     
     if df.empty:
@@ -772,10 +833,10 @@ def profile():
             try:
                 if password:
                     hashed_password = generate_password_hash(password)
-                    conn.execute('UPDATE users SET name = ?, password = ? WHERE id = ?',
+                    execute_query(conn, 'UPDATE users SET name = ?, password = ? WHERE id = ?',
                                (name, hashed_password, session['user_id']))
                 else:
-                    conn.execute('UPDATE users SET name = ? WHERE id = ?',
+                    execute_query(conn, 'UPDATE users SET name = ? WHERE id = ?',
                                (name, session['user_id']))
                 conn.commit()
                 session['user_name'] = name
@@ -783,7 +844,7 @@ def profile():
             except Exception as e:
                 flash(f'Error updating profile: {str(e)}', 'error')
                 
-    user = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    user = execute_query(conn, 'SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
     conn.close()
     
     return render_template('profile.html', user=user)
@@ -793,7 +854,7 @@ def profile():
 def edit_report(report_id):
     """Edit an existing work report"""
     conn = get_db_connection()
-    report = conn.execute('SELECT * FROM submissions WHERE id = ?', (report_id,)).fetchone()
+    report = execute_query(conn, 'SELECT * FROM submissions WHERE id = ?', (report_id,)).fetchone()
     
     if not report:
         conn.close()
@@ -836,7 +897,7 @@ def edit_report(report_id):
                     file_path = new_file_path
             
             try:
-                conn.execute(
+                execute_query(conn, 
                     '''UPDATE submissions 
                        SET work_text = ?, file_path = ?, client_name = ?, work_type = ?, quantity = ? 
                        WHERE id = ?''',
@@ -856,7 +917,7 @@ def edit_report(report_id):
 def delete_report(report_id):
     """Delete a work report"""
     conn = get_db_connection()
-    report = conn.execute('SELECT * FROM submissions WHERE id = ?', (report_id,)).fetchone()
+    report = execute_query(conn, 'SELECT * FROM submissions WHERE id = ?', (report_id,)).fetchone()
     
     if not report:
         conn.close()
@@ -877,7 +938,7 @@ def delete_report(report_id):
             except:
                 pass
                 
-        conn.execute('DELETE FROM submissions WHERE id = ?', (report_id,))
+        execute_query(conn, 'DELETE FROM submissions WHERE id = ?', (report_id,))
         conn.commit()
         flash('Report deleted successfully!', 'success')
     except Exception as e:
