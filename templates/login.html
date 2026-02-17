@@ -35,7 +35,61 @@
             </button>
         </form>
 
-        <div class="auth-footer">
+        <div class="auth-footer" style="text-align: center;">
+            <button class="btn btn-ghost btn-sm" onclick="showModal('demoModal')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    style="margin-right: 8px;">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 16v-4" />
+                    <path d="M12 8h.01" />
+                </svg>
+                Help / Demo Credentials
+            </button>
+        </div>
+    </div>
+
+    <!-- Demo Credentials Modal -->
+    <div id="demoModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Access Information</h3>
+                <button class="modal-close" onclick="closeModal('demoModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="color: var(--gray-600); font-size: 0.9375rem; margin-bottom: 1rem;">Use the following accounts
+                    to explore the system features:</p>
+
+                <div class="demo-credentials" style="margin-bottom: 1rem;">
+                    <div class="demo-label">Admin Account</div>
+                    <div class="demo-grid">
+                        <div class="demo-item">
+                            <strong>Name</strong>
+                            <code>Prashanth</code>
+                        </div>
+                        <div class="demo-item">
+                            <strong>Password</strong>
+                            <code>admin123</code>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="demo-credentials">
+                    <div class="demo-label">Employee Account</div>
+                    <div class="demo-grid">
+                        <div class="demo-item">
+                            <strong>Name</strong>
+                            <code>Sample Employee</code>
+                        </div>
+                        <div class="demo-item">
+                            <strong>Password</strong>
+                            <code>emp123</code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" onclick="closeModal('demoModal')">Got it</button>
+            </div>
         </div>
     </div>
 

@@ -24,9 +24,8 @@
 
     <!-- Status Section -->
     <div class="status-section" style="margin-bottom: var(--spacing-xl);">
-        <div class="status-card {% if submitted_today %}status-submitted{% else %}status-pending{% endif %}"
-            style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; padding: 1rem 1.5rem;">
-            <div class="status-header" style="margin-bottom: 0;">
+        <div class="status-card {% if submitted_today %}status-submitted{% else %}status-pending{% endif %}">
+            <div class="status-header">
                 <div class="status-icon">
                     {% if submitted_today %}
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -42,8 +41,8 @@
                     {% endif %}
                 </div>
                 <div class="status-info">
-                    <h3 class="status-title" style="font-size: 0.8rem;">Today's Status</h3>
-                    <p class="status-label" style="font-size: 1.1rem;">
+                    <h3 class="status-title">Today's Status</h3>
+                    <p class="status-label">
                         {% if submitted_today %}
                         {{ submission_count_today }} Submission{{ 's' if submission_count_today > 1 else '' }} Today
                         {% else %}
@@ -53,10 +52,10 @@
                 </div>
             </div>
             {% if submitted_today %}
-            <p class="status-message" style="margin: 0; font-size: 0.9rem;">Great job! You can submit more if needed.
+            <p class="status-message">Great job! You can submit more if needed.
             </p>
             {% else %}
-            <p class="status-message" style="margin: 0; font-size: 0.9rem;">Submit your first work report for today.</p>
+            <p class="status-message">Submit your first work report for today.</p>
             {% endif %}
         </div>
     </div>
@@ -156,7 +155,7 @@
                     <div class="form-help">Provide a detailed summary of your activities</div>
                 </div>
 
-                <button type="submit" class="btn btn-primary btn-full" style="max-width: 200px;">
+                <button type="submit" class="btn btn-primary btn-full-mobile">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
                         <polyline points="17 21 17 13 7 13 7 21" />
@@ -171,28 +170,26 @@
 
 <!-- Recent Submissions -->
 <div class="card">
-    <div class="card-header"
-        style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-        <div>
+    <div class="card-header">
+        <div class="header-info">
             <h2 class="card-title">Recent Submissions</h2>
             <p class="card-subtitle">Your work reports history</p>
         </div>
 
-        <div style="display: flex; gap: 10px; align-items: center;">
-            <form method="GET" action="{{ url_for('employee_dashboard') }}"
-                style="display: flex; gap: 10px; align-items: center;">
+        <div class="card-actions">
+            <form method="GET" action="{{ url_for('employee_dashboard') }}" class="filter-mini-form">
                 <div class="form-group" style="margin-bottom: 0;">
                     <input type="date" name="date" class="form-input" value="{{ request.args.get('date', '') }}"
                         style="padding: 6px 12px; height: auto;">
                 </div>
-                <button type="submit" class="btn btn-sm btn-secondary">Filter</button>
+                <button type="submit" class="btn btn-sm btn-ghost">Filter</button>
                 {% if request.args.get('date') %}
                 <a href="{{ url_for('employee_dashboard') }}" class="btn btn-sm btn-ghost">Clear</a>
                 {% endif %}
             </form>
 
             <a href="{{ url_for('download_monthly_report', employee_id=session['user_id'], month=now.strftime('%Y-%m')) }}"
-                class="btn btn-sm btn-ghost" style="color: var(--success); border-color: var(--success);">
+                class="btn btn-sm btn-primary">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                     <polyline points="7 10 12 15 17 10" />

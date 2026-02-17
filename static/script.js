@@ -24,7 +24,54 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Initialize client selection logic
     initializeClientSelection();
+
+    // Initialize navigation toggle
+    initializeNavToggle();
+
+    // Modal Edit Employee Buttons (Refactored from inline onclick)
+    document.querySelectorAll('.edit-employee-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const id = this.getAttribute('data-id');
+            const name = this.getAttribute('data-name');
+            const email = this.getAttribute('data-email');
+            const type = this.getAttribute('data-type');
+            showEditEmployeeModal(id, name, email, type);
+        });
+    });
 });
+
+// ========== Navigation Toggle ==========
+function initializeNavToggle() {
+    const navToggle = document.getElementById('nav-toggle');
+    const navMenu = document.getElementById('nav-menu');
+
+    if (navToggle && navMenu) {
+        navToggle.addEventListener('click', function () {
+            navToggle.classList.toggle('active');
+            navMenu.classList.toggle('active');
+            document.body.classList.toggle('no-scroll');
+        });
+
+        // Close menu when clicking a link
+        const navLinksArr = navMenu.querySelectorAll('a');
+        navLinksArr.forEach(link => {
+            link.addEventListener('click', () => {
+                navToggle.classList.remove('active');
+                navMenu.classList.remove('active');
+                document.body.classList.remove('no-scroll');
+            });
+        });
+
+        // Close menu when clicking outside
+        document.addEventListener('click', function (e) {
+            if (!navMenu.contains(e.target) && !navToggle.contains(e.target) && navMenu.classList.contains('active')) {
+                navToggle.classList.remove('active');
+                navMenu.classList.remove('active');
+                document.body.classList.remove('no-scroll');
+            }
+        });
+    }
+}
 
 // ========== Client Selection Logic ==========
 function initializeClientSelection() {
@@ -286,10 +333,20 @@ function initializeModals() {
     });
 }
 
+function showModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.classList.add('active');
+        // Prevent body scroll
+        document.body.classList.add('no-scroll');
+    }
+}
+
 function showAddEmployeeModal() {
     const modal = document.getElementById('addEmployeeModal');
     if (modal) {
         modal.classList.add('active');
+        document.body.classList.add('no-scroll');
         // Focus on first input
         const firstInput = modal.querySelector('input[type="text"]');
         if (firstInput) {
@@ -319,6 +376,7 @@ function showEditEmployeeModal(id, name, email, employmentType) {
 
         // Show modal
         modal.classList.add('active');
+        document.body.classList.add('no-scroll');
 
         // Focus on first input
         setTimeout(() => document.getElementById('edit_name').focus(), 100);
@@ -338,6 +396,7 @@ function closeModal(modalId) {
         setTimeout(() => {
             modal.classList.remove('active');
             modal.style.opacity = '';
+            document.body.classList.remove('no-scroll');
             if (content) {
                 content.style.transform = '';
                 content.style.opacity = '';
