@@ -26,17 +26,45 @@ ALLOWED_EXTENSIONS = {'txt', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'png', 'jpg', 
 # Ensure upload directory exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    flash('File is too large! Maximum size allowed is 16MB.', 'error')
+    return redirect(request.referrer or url_for('index'))
+
+@app.errorhandler(404)
+def page_not_found(error):
+    return render_template('login.html'), 404
+
+@app.errorhandler(500)
+def internal_server_error(error):
+    return "Internal Server Error", 500
+
 def calculate_submission_amount(work_type, quantity, employment_type):
-    """Calculate amount based on work type for freelancers"""
-    if employment_type != 'freelancer':
-        return 0
+    """Calculate amount based on work type for both inhouse and freelancers"""
     
-    rate = 0
-    if work_type == 'Poster':
-        rate = 300
-    elif work_type in ['Reel', 'Video']:
-        rate = 600
-        
+    # Pricing structure (applies to both inhouse and freelancers)
+    rates = {
+        'Shoot with Camera': 2000,
+        'Calendar Poster': 300,
+        'Informative Poster': 300,
+        'Elevation Poster': 300,
+        'Reel': 600,
+        'Press Conference Shoot': 400,
+        'Regular Video': 1500,
+        'Cinematic Videos': 2500,
+        'Brochures': 1000,
+        'Printing Material': 500,
+        'Shoot on Mobile': 2500,
+        'Poster': 300,
+        'Video': 1500,
+        'Brochure': 1000,
+        'Print Material': 500,
+        'Web Development': 1200,
+        'Other': 0
+    }
+    
+    rate = rates.get(work_type, 0)
+    
     try:
         qty = int(quantity or 0)
     except (ValueError, TypeError):
@@ -51,17 +79,24 @@ def format_datetime_filter(value, only_time=False):
     
     # If it's already a string (SQLite)
     if isinstance(value, str):
-        # Remove milliseconds if present
-        val = value.split('.')[0]
-        if only_time and ' ' in val:
-            return val.split(' ')[1]
-        return val
+        # Handle formats like 2024-02-15 13:01:17.123456 or 2024-02-15 13:01:17
+        try:
+            # Remove milliseconds if present
+            val = value.split('.')[0]
+            if only_time and ' ' in val:
+                return val.split(' ')[1]
+            return val
+        except:
+            return value
         
     # If it's a datetime/date object (Postgres)
     if hasattr(value, 'strftime'):
-        if only_time:
-            return value.strftime("%H:%M:%S")
-        return value.strftime("%Y-%m-%d %H:%M:%S")
+        try:
+            if only_time:
+                return value.strftime("%H:%M:%S")
+            return value.strftime("%Y-%m-%d %H:%M:%S")
+        except:
+            return str(value)
         
     return str(value)
 
@@ -122,6 +157,7 @@ def init_db():
             id {id_type},
             user_id INTEGER NOT NULL,
             work_text TEXT NOT NULL,
+            client_category TEXT,
             client_name TEXT,
             work_type TEXT,
             quantity INTEGER DEFAULT 1,
@@ -136,6 +172,7 @@ def init_db():
     # Add columns to existing tables if they don't exist
     for column, table, definition in [
         ('employment_type', 'users', 'TEXT DEFAULT "inhouse"'),
+        ('client_category', 'submissions', 'TEXT'),
         ('client_name', 'submissions', 'TEXT'),
         ('work_type', 'submissions', 'TEXT'),
         ('quantity', 'submissions', 'INTEGER DEFAULT 1')
@@ -185,7 +222,8 @@ def execute_query(conn, query, params=None):
         # Robust strftime translation
         if 'strftime' in query:
             # Replaces strftime('%Y-%m', col) or strftime("%Y-%m", col) with TO_CHAR(col, 'YYYY-MM')
-            query = re.sub(r"strftime\(['\"]%Y-%m['\"],\s*(\w+\.?\w+)\)", r"TO_CHAR(\1, 'YYYY-MM')", query)
+            # Added \s* around params to handle formatting differences
+            query = re.sub(r"strftime\(\s*['\"]%Y-%m['\"]\s*,\s*(\w+\.?\w+)\s*\)", r"TO_CHAR(\1, 'YYYY-MM')", query)
         
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         cursor.execute(query, params or ())
@@ -236,19 +274,19 @@ def index():
 def login():
     """Handle user login"""
     if request.method == 'POST':
-        email = request.form.get('email')
+        name = request.form.get('name')
         password = request.form.get('password')
         
-        if not email or not password:
-            flash('Please provide both email and password.', 'error')
+        if not name or not password:
+            flash('Please provide both name and password.', 'error')
             return render_template('login.html')
         
         conn = get_db_connection()
-        user = execute_query(conn, 'SELECT * FROM users WHERE email = ?', (email.strip(),)).fetchone()
+        user = execute_query(conn, 'SELECT * FROM users WHERE name = ?', (name.strip(),)).fetchone()
         conn.close()
         
         if not user:
-            flash('No user found with this email address.', 'error')
+            flash('No user found with this name.', 'error')
         elif not check_password_hash(user['password'], password):
             flash('Incorrect password. Please try again.', 'error')
         else:
@@ -291,11 +329,18 @@ def employee_dashboard():
     
     submission_count_today = len(submissions_today)
     
-    # Get recent submissions (last 20 to show more)
-    recent_submissions = [dict(row) for row in execute_query(conn, 
-        'SELECT * FROM submissions WHERE user_id = ? ORDER BY date DESC, created_at DESC LIMIT 20',
-        (session['user_id'],)
-    ).fetchall()]
+    # Get recent submissions (filtered or last 20)
+    date_filter = request.args.get('date')
+    if date_filter:
+        recent_submissions = [dict(row) for row in execute_query(conn, 
+            'SELECT * FROM submissions WHERE user_id = ? AND date = ? ORDER BY created_at DESC',
+            (session['user_id'], date_filter)
+        ).fetchall()]
+    else:
+        recent_submissions = [dict(row) for row in execute_query(conn, 
+            'SELECT * FROM submissions WHERE user_id = ? ORDER BY date DESC, created_at DESC LIMIT 20',
+            (session['user_id'],)
+        ).fetchall()]
     
     conn.close()
     
@@ -317,13 +362,25 @@ def submit_report():
         return redirect(url_for('admin_dashboard'))
     
     work_text = request.form.get('work_text', '').strip()
+    client_category = request.form.get('client_category', '').strip()
     client_name = request.form.get('client_name', '').strip()
+    other_client_name = request.form.get('other_client_name', '').strip()
     work_type = request.form.get('work_type', '').strip()
+    other_work_type_name = request.form.get('other_work_type_name', '').strip()
     quantity = request.form.get('quantity', 1)
+    
     today = date.today().isoformat()
     
-    if not work_text:
-        flash('Please provide a description of your work.', 'error')
+    # Handle 'Other' client name
+    if client_name in ['Others', 'Other'] and other_client_name:
+        client_name = other_client_name
+
+    # Handle 'Other' work type
+    if work_type == 'Other' and other_work_type_name:
+        work_type = other_work_type_name
+
+    if not work_text or not client_name:
+        flash('Please provide work description and client name.', 'error')
         return redirect(url_for('employee_dashboard'))
     
     # Handle file upload
@@ -340,6 +397,18 @@ def submit_report():
     
     conn = get_db_connection()
     
+    # Check for duplicate submission (same text, client, and work type on same day)
+    existing_check = execute_query(conn, 
+        '''SELECT id FROM submissions 
+           WHERE user_id = ? AND date = ? AND work_text = ? AND client_name = ? AND work_type = ?''',
+        (session['user_id'], today, work_text, client_name, work_type)
+    ).fetchone()
+    
+    if existing_check:
+        conn.close()
+        flash('You have already submitted an identical report today.', 'info')
+        return redirect(url_for('employee_dashboard'))
+    
     # Get submission count for today to set submission_number
     res = execute_query(conn, 
         'SELECT COUNT(*) as count FROM submissions WHERE user_id = ? AND date = ?',
@@ -352,8 +421,8 @@ def submit_report():
     # Insert new submission
     try:
         execute_query(conn, 
-            'INSERT INTO submissions (user_id, work_text, client_name, work_type, quantity, file_path, date, submission_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            (session['user_id'], work_text, client_name, work_type, quantity, file_path, today, submission_number)
+            'INSERT INTO submissions (user_id, work_text, client_category, client_name, work_type, quantity, file_path, date, submission_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            (session['user_id'], work_text, client_category, client_name, work_type, quantity, file_path, today, submission_number)
         )
         conn.commit()
         flash(f'Work report #{submission_number} submitted successfully!', 'success')
@@ -396,7 +465,7 @@ def admin_dashboard():
     submissions = [dict(row) for row in execute_query(conn, query, params).fetchall()]
     
     # Get all employees and freelancers separately
-    employees = [dict(row) for row in execute_query(conn, 
+    employees_raw = [dict(row) for row in execute_query(conn, 
         'SELECT * FROM users WHERE role = ? AND employment_type = ? ORDER BY name',
         ('employee', 'inhouse')
     ).fetchall()]
@@ -406,8 +475,24 @@ def admin_dashboard():
         ('employee', 'freelancer')
     ).fetchall()]
 
-    # Calculate monthly amounts for freelancers
+    # Calculate monthly amounts for both employees and freelancers
     current_month = date.today().strftime('%Y-%m')
+    
+    # Process employees (inhouse)
+    employees_with_amounts = []
+    for e in employees_raw:
+        e_dict = dict(e)
+        # Get all submissions for this employee for the current month
+        e_submissions = execute_query(conn, 
+            'SELECT work_type, quantity FROM submissions WHERE user_id = ? AND strftime("%Y-%m", date) = ?',
+            (e['id'], current_month)
+        ).fetchall()
+        
+        total_amount = sum(calculate_submission_amount(s['work_type'], s['quantity'], 'inhouse') for s in e_submissions)
+        e_dict['monthly_amount'] = total_amount
+        employees_with_amounts.append(e_dict)
+    
+    # Process freelancers
     freelancers_with_amounts = []
     for f in freelancers:
         f_dict = dict(f)
@@ -423,7 +508,7 @@ def admin_dashboard():
     
     # Get statistics
     total_submissions = execute_query(conn, 'SELECT COUNT(*) as count FROM submissions').fetchone()['count']
-    total_employees = len(employees)
+    total_employees = len(employees_with_amounts)
     today_submissions = execute_query(conn, 
         'SELECT COUNT(*) as count FROM submissions WHERE date = ?',
         (date.today().isoformat(),)
@@ -434,10 +519,10 @@ def admin_dashboard():
     return render_template(
         'admin_dashboard.html',
         submissions=submissions,
-        employees=employees,
+        employees=employees_with_amounts,
         freelancers=freelancers_with_amounts,
         total_submissions=total_submissions,
-        total_employees=len(employees),
+        total_employees=len(employees_with_amounts),
         total_freelancers=len(freelancers),
         today_submissions=today_submissions,
         employee_filter=employee_filter,
@@ -459,9 +544,17 @@ def add_employee():
     
     conn = get_db_connection()
     
-    # Check if email already exists
-    existing = execute_query(conn, 'SELECT * FROM users WHERE email = ?', (email,)).fetchone()
-    if existing:
+    
+    # Check if name or email already exists
+    existing_name = execute_query(conn, 'SELECT * FROM users WHERE name = ?', (name,)).fetchone()
+    existing_email = execute_query(conn, 'SELECT * FROM users WHERE email = ?', (email,)).fetchone()
+    
+    if existing_name:
+        flash('Employee name already exists. Please choose a different name.', 'error')
+        conn.close()
+        return redirect(url_for('admin_dashboard'))
+
+    if existing_email:
         flash('Email already exists.', 'error')
         conn.close()
         return redirect(url_for('admin_dashboard'))
@@ -506,9 +599,17 @@ def edit_employee(employee_id):
     
     # Check if new email is already taken by another user
     if email != employee['email']:
-        existing = execute_query(conn, 'SELECT * FROM users WHERE email = ? AND id != ?', (email, employee_id)).fetchone()
-        if existing:
+        existing_email = execute_query(conn, 'SELECT * FROM users WHERE email = ? AND id != ?', (email, employee_id)).fetchone()
+        if existing_email:
             flash('Email already in use by another employee.', 'error')
+            conn.close()
+            return redirect(url_for('admin_dashboard'))
+
+    # Check if new name is already taken by another user
+    if name != employee['name']:
+        existing_name = execute_query(conn, 'SELECT * FROM users WHERE name = ? AND id != ?', (name, employee_id)).fetchone()
+        if existing_name:
+            flash('Name already in use by another employee.', 'error')
             conn.close()
             return redirect(url_for('admin_dashboard'))
 
@@ -722,6 +823,9 @@ def download_monthly_report(employee_id):
         flash('No data found for the selected month.', 'info')
         return redirect(url_for('view_employee_reports', employee_id=employee_id))
 
+    # Add Employee Name as second column
+    df.insert(1, 'Employee Name', employee['name'])
+
     is_admin = session.get('role') == 'admin'
     
     if is_admin:
@@ -782,10 +886,14 @@ def download_filtered_reports():
     
     conn = get_db_connection()
     
+    # Calculate amount
+    filtered_submissions = []
+    
     query = '''
-        SELECT u.name as "Employee Name",
+        SELECT s.date as "Date", 
+               u.name as "Employee Name",
                u.employment_type as "Type",
-               s.date as "Date", 
+               s.client_category as "Category",
                s.client_name as "Client",
                s.work_type as "Work Type",
                s.quantity as "Qty",
@@ -795,8 +903,8 @@ def download_filtered_reports():
         JOIN users u ON s.user_id = u.id
         WHERE 1=1
     '''
-    params = []
     
+    params = []
     if employee_filter:
         query += ' AND u.name LIKE ?'
         params.append(f'%{employee_filter}%')
@@ -804,38 +912,46 @@ def download_filtered_reports():
     if date_filter:
         query += ' AND s.date = ?'
         params.append(date_filter)
-    
+        
     query += ' ORDER BY s.date DESC, s.created_at DESC'
     
-    # Replace placeholders for pd.read_sql_query
-    _, q = get_db_info()
-    df_query = query.replace('?', q)
-    
-    df = pd.read_sql_query(df_query, conn, params=params)
+    df = pd.read_sql_query(query, conn, params=params)
     conn.close()
     
     if df.empty:
-        flash('No submissions found to export.', 'info')
         return redirect(url_for('admin_dashboard'))
 
-    # Calculate amount column
+    # Add Amount column for freelancers
+    # ... logic to calculate amount ...
     df['Amount'] = df.apply(lambda row: calculate_submission_amount(row['Work Type'], row['Qty'], row['Type']), axis=1)
     
-    # Reorder columns to put Amount after Qty
-    cols = list(df.columns)
-    qty_idx = cols.index('Qty')
-    cols.insert(qty_idx + 1, cols.pop(cols.index('Amount')))
-    df = df[cols]
+    # Reorder columns: Date, Employee Name, Type, Category, Client, Work Type, Qty, Amount, Description, Submitted At
+    desired_order = ['Date', 'Employee Name', 'Type', 'Category', 'Client', 'Work Type', 'Qty', 'Amount', 'Description', 'Submitted At']
+    # Filter only columns that exist
+    final_cols = [c for c in desired_order if c in df.columns]
+    df = df[final_cols]
 
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='All Submissions')
+        df.to_excel(writer, index=False, sheet_name='Work Reports')
         
         # Auto-adjust columns
-        worksheet = writer.sheets['All Submissions']
+        worksheet = writer.sheets['Work Reports']
         for i, col in enumerate(df.columns):
-            column_len = max(df[col].astype(str).map(len).max(), len(col)) + 2
-            worksheet.column_dimensions[chr(65 + i)].width = min(column_len, 50)
+            # Safe length calculation
+            max_len = 0
+            if not df[col].empty:
+                max_len = df[col].astype(str).map(len).max()
+            column_len = max(max_len, len(str(col))) + 2
+            # Excel column letter (A, B, C...)
+            col_letter = chr(65 + i)
+            if i > 25: # For AA, AB etc if needed, though simple logic handles A-Z
+                 col_letter = chr(65 + (i // 26) - 1) + chr(65 + (i % 26))
+            
+            try:
+                worksheet.column_dimensions[col_letter].width = min(column_len, 50)
+            except:
+                pass # Fallback if column letter logic fails for many columns
 
     output.seek(0)
     
@@ -903,9 +1019,15 @@ def edit_report(report_id):
         
     if request.method == 'POST':
         work_text = request.form.get('work_text', '').strip()
+        client_category = request.form.get('client_category', '').strip()
         client_name = request.form.get('client_name', '').strip()
+        other_client_name = request.form.get('other_client_name', '').strip()
         work_type = request.form.get('work_type', '').strip()
         quantity = request.form.get('quantity', '1')
+        
+        # Handle 'Other' client name
+        if client_name in ['Others', 'Other'] and other_client_name:
+            client_name = other_client_name
         
         if not work_text or not client_name or not work_type:
             flash('All fields marked with * are required.', 'error')
@@ -931,9 +1053,9 @@ def edit_report(report_id):
             try:
                 execute_query(conn, 
                     '''UPDATE submissions 
-                       SET work_text = ?, file_path = ?, client_name = ?, work_type = ?, quantity = ? 
+                       SET work_text = ?, file_path = ?, client_category = ?, client_name = ?, work_type = ?, quantity = ? 
                        WHERE id = ?''',
-                    (work_text, file_path, client_name, work_type, quantity, report_id)
+                    (work_text, file_path, client_category, client_name, work_type, quantity, report_id)
                 )
                 conn.commit()
                 flash('Report updated successfully!', 'success')
@@ -980,11 +1102,11 @@ def delete_report(report_id):
     return redirect(url_for('index'))
 
 if __name__ == '__main__':
-    # Create uploads folder if it doesn't exist
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     
-    # Initialize database
-    init_db()
+    # Database is initialized at the top level, no need to call it again here
+    # unless we want to ensure it's fresh on every restart. 
+    # But it's already called on line 166.
     
     print("\n" + "="*60)
     print("Work Report Management System")

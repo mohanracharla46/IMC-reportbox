@@ -6,7 +6,7 @@
 <div class="dashboard-container">
     <div class="dashboard-header">
         <div class="header-content">
-            <h1 class="page-title">Your Dashboard</h1>
+            <h1 class="page-title">{{ session['user_name'] }}'s Dashboard</h1>
             <p class="page-subtitle">Submit and track your daily work reports</p>
         </div>
         <div class="header-date">
@@ -20,18 +20,19 @@
         </div>
     </div>
 
-    <div class="dashboard-grid">
-        <!-- Status Card -->
-        <div class="status-card {% if submitted_today %}status-submitted{% else %}status-pending{% endif %}">
-            <div class="status-header">
+    <!-- Status Section -->
+    <div class="status-section" style="margin-bottom: var(--spacing-xl);">
+        <div class="status-card {% if submitted_today %}status-submitted{% else %}status-pending{% endif %}"
+            style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; padding: 1rem 1.5rem;">
+            <div class="status-header" style="margin-bottom: 0;">
                 <div class="status-icon">
                     {% if submitted_today %}
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                         stroke-width="2.5">
                         <polyline points="20 6 9 17 4 12" />
                     </svg>
                     {% else %}
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                         stroke-width="2.5">
                         <circle cx="12" cy="12" r="10" />
                         <polyline points="12 6 12 12 16 14" />
@@ -39,8 +40,8 @@
                     {% endif %}
                 </div>
                 <div class="status-info">
-                    <h3 class="status-title">Today's Status</h3>
-                    <p class="status-label">
+                    <h3 class="status-title" style="font-size: 0.8rem;">Today's Status</h3>
+                    <p class="status-label" style="font-size: 1.1rem;">
                         {% if submitted_today %}
                         {{ submission_count_today }} Submission{{ 's' if submission_count_today > 1 else '' }} Today
                         {% else %}
@@ -50,13 +51,15 @@
                 </div>
             </div>
             {% if submitted_today %}
-            <p class="status-message">Great job! You've submitted {{ submission_count_today }} report{{ 's' if
-                submission_count_today > 1 else '' }} today. You can submit more if needed.</p>
+            <p class="status-message" style="margin: 0; font-size: 0.9rem;">Great job! You can submit more if needed.
+            </p>
             {% else %}
-            <p class="status-message">Submit your first work report for today.</p>
+            <p class="status-message" style="margin: 0; font-size: 0.9rem;">Submit your first work report for today.</p>
             {% endif %}
         </div>
+    </div>
 
+    <div class="dashboard-grid" style="grid-template-columns: 1fr;">
         <!-- Submission Form -->
         <div class="card">
             <div class="card-header">
@@ -64,33 +67,65 @@
                 <p class="card-subtitle">You can submit multiple reports per day</p>
             </div>
             <form method="POST" action="{{ url_for('submit_report') }}" enctype="multipart/form-data"
-                class="report-form">
+                class="report-form" style="padding: var(--spacing-xl);">
+
+                <!-- 1. Client Category -->
+                <!-- 2. Client Name -->
                 <div class="form-grid"
-                    style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
                     <div class="form-group">
-                        <label for="client_name" class="form-label">Client Name</label>
-                        <input type="text" id="client_name" name="client_name" class="form-input"
-                            placeholder="Enter client name..." required>
+                        <label for="client_category" class="form-label">Client Category <span
+                                style="color: var(--error);">*</span></label>
+                        <select id="client_category" name="client_category" class="form-input" required>
+                            <option value="" disabled selected>Select category</option>
+                            <option value="Political">Political</option>
+                            <option value="Corporate">Corporate</option>
+                        </select>
                     </div>
+
                     <div class="form-group">
-                        <label for="work_type" class="form-label">Work Type</label>
-                        <select id="work_type" name="work_type" class="form-input" required>
-                            <option value="" disabled selected>Select work type</option>
-                            <option value="Poster">Poster</option>
-                            <option value="Reel">Reel</option>
-                            <option value="Video">Video</option>
-                            <option value="Web Dev">Web Dev</option>
+                        <label for="client_name" class="form-label">Client Name <span
+                                style="color: var(--error);">*</span></label>
+                        <select id="client_name" name="client_name" class="form-input" required>
+                            <option value="" disabled selected>Select client category first</option>
                         </select>
                     </div>
                 </div>
 
+                <div id="other_client_group" class="form-group" style="display: none; margin-bottom: 1.5rem;">
+                    <label for="other_client_name" class="form-label">Other Client Name <span
+                            style="color: var(--error);">*</span></label>
+                    <input type="text" id="other_client_name" name="other_client_name" class="form-input"
+                        placeholder="Enter client name manually...">
+                </div>
+
+                <!-- 3. Work Type -->
+                <div class="form-group" style="margin-bottom: 1.5rem;">
+                    <label for="work_type" class="form-label">Work Type <span
+                            style="color: var(--error);">*</span></label>
+                    <select id="work_type" name="work_type" class="form-input" required>
+                        <option value="" disabled selected>Select category first</option>
+                    </select>
+                </div>
+
+                <div id="other_work_type_group" class="form-group" style="display: none; margin-bottom: 1.5rem;">
+                    <label for="other_work_type_name" class="form-label">Other Work Type <span
+                            style="color: var(--error);">*</span></label>
+                    <input type="text" id="other_work_type_name" name="other_work_type_name" class="form-input"
+                        placeholder="Enter work type manually...">
+                </div>
+
+                <!-- 4. Quantity -->
+                <!-- 5. Attachment -->
                 <div class="form-grid"
-                    style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
                     <div class="form-group">
-                        <label for="quantity" class="form-label">Quantity / Count</label>
+                        <label for="quantity" class="form-label">Quantity / Count <span
+                                style="color: var(--error);">*</span></label>
                         <input type="number" id="quantity" name="quantity" class="form-input" value="1" min="1"
                             required>
                     </div>
+
                     <div class="form-group">
                         <label for="file" class="form-label">Attachment (Optional)</label>
                         <div class="file-upload">
@@ -109,15 +144,17 @@
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label for="work_text" class="form-label">Work Description</label>
+                <!-- 6. Work Description -->
+                <div class="form-group" style="margin-bottom: 1.5rem;">
+                    <label for="work_text" class="form-label">Work Description <span
+                            style="color: var(--error);">*</span></label>
                     <textarea id="work_text" name="work_text" class="form-textarea" rows="4"
                         placeholder="Describe your work, accomplishments, and any challenges faced..."
                         required></textarea>
                     <div class="form-help">Provide a detailed summary of your activities</div>
                 </div>
 
-                <button type="submit" class="btn btn-primary btn-full">
+                <button type="submit" class="btn btn-primary btn-full" style="max-width: 200px;">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
                         <polyline points="17 21 17 13 7 13 7 21" />
@@ -128,14 +165,30 @@
             </form>
         </div>
     </div>
+</div>
 
-    <!-- Recent Submissions -->
-    <div class="card">
-        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
-                <h2 class="card-title">Recent Submissions</h2>
-                <p class="card-subtitle">Your last 20 work reports</p>
-            </div>
+<!-- Recent Submissions -->
+<div class="card">
+    <div class="card-header"
+        style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <h2 class="card-title">Recent Submissions</h2>
+            <p class="card-subtitle">Your work reports history</p>
+        </div>
+
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <form method="GET" action="{{ url_for('employee_dashboard') }}"
+                style="display: flex; gap: 10px; align-items: center;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <input type="date" name="date" class="form-input" value="{{ request.args.get('date', '') }}"
+                        style="padding: 6px 12px; height: auto;">
+                </div>
+                <button type="submit" class="btn btn-sm btn-secondary">Filter</button>
+                {% if request.args.get('date') %}
+                <a href="{{ url_for('employee_dashboard') }}" class="btn btn-sm btn-ghost">Clear</a>
+                {% endif %}
+            </form>
+
             <a href="{{ url_for('download_monthly_report', employee_id=session['user_id'], month=now.strftime('%Y-%m')) }}"
                 class="btn btn-sm btn-ghost" style="color: var(--success); border-color: var(--success);">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -143,92 +196,105 @@
                     <polyline points="7 10 12 15 17 10" />
                     <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
-                Export Current Month
+                Export Month
             </a>
         </div>
-
-        {% if recent_submissions %}
-        <div class="table-container">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Client</th>
-                        <th>Type</th>
-                        <th>Qty</th>
-                        <th>Work Description</th>
-                        <th>Attachment</th>
-                        <th>Submitted At</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for submission in recent_submissions %}
-                    <tr>
-                        <td>
-                            <span class="date-badge">{{ submission['date'] }}</span>
-                        </td>
-                        <td>
-                            <span class="client-name">{{ submission['client_name'] or 'N/A' }}</span>
-                        </td>
-                        <td>
-                            <span class="work-type-badge">{{ submission['work_type'] or 'N/A' }}</span>
-                        </td>
-                        <td>
-                            <span class="quantity-badge">{{ submission['quantity'] or 1 }}</span>
-                        </td>
-                        <td>
-                            <div class="work-text">{{ submission['work_text'][:60] }}{% if
-                                submission['work_text']|length > 60 %}...{% endif %}</div>
-                        </td>
-                        <td>
-                            {% if submission['file_path'] %}
-                            <a href="{{ url_for('download_file', filename=submission['file_path']|filename) }}"
-                                class="file-link">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                    <polyline points="7 10 12 15 17 10" />
-                                    <line x1="12" y1="15" x2="12" y2="3" />
-                                </svg>
-                                Download
-                            </a>
-                            {% else %}
-                            <span class="text-muted">No file</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <span class="time-text">{{ submission['created_at']|format_dt }}</span>
-                        </td>
-                        <td>
-                            <div style="display: flex; gap: 5px;">
-                                <a href="{{ url_for('edit_report', report_id=submission['id']) }}" class="btn btn-ghost"
-                                    style="padding: 4px 8px; font-size: 0.8rem;">Edit</a>
-                                <form action="{{ url_for('delete_report', report_id=submission['id']) }}" method="POST"
-                                    onsubmit="return confirm('Delete this report?');" style="display:inline;">
-                                    <button type="submit" class="btn btn-ghost"
-                                        style="padding: 4px 8px; font-size: 0.8rem; color: var(--error); border-color: var(--error);">Del</button>
-                                </form>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <div class="empty-state">
-            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="16" y1="13" x2="8" y2="13" />
-                <line x1="16" y1="17" x2="8" y2="17" />
-                <polyline points="10 9 9 9 8 9" />
-            </svg>
-            <h3>No submissions yet</h3>
-            <p>Your submitted work reports will appear here</p>
-        </div>
-        {% endif %}
     </div>
+
+    {% if recent_submissions %}
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Client</th>
+                    <th>Type</th>
+                    <th>Qty</th>
+                    {% if session.employment_type == 'freelancer' %}
+                    <th>Amount</th>
+                    {% endif %}
+                    <th>Work Description</th>
+                    <th>Attachment</th>
+                    <th>Submitted At</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for submission in recent_submissions %}
+                <tr>
+                    <td>
+                        <span class="date-badge">{{ submission['date'] }}</span>
+                    </td>
+                    <td>
+                        <span class="client-name">{{ submission['client_name'] or 'N/A' }}</span>
+                    </td>
+                    <td>
+                        <span class="work-type-badge">{{ submission['work_type'] or 'N/A' }}</span>
+                    </td>
+                    <td>
+                        <span class="quantity-badge">{{ submission['quantity'] or 1 }}</span>
+                    </td>
+                    {% if session.employment_type == 'freelancer' %}
+                    <td>
+                        <span class="quantity-badge"
+                            style="background: var(--success-bg); color: var(--success); font-weight: 600;">
+                            ₹{{ calculate_submission_amount(submission['work_type'], submission['quantity'],
+                            session.employment_type) }}
+                        </span>
+                    </td>
+                    {% endif %}
+                    <td>
+                        <div class="work-text">{{ submission['work_text'][:60] }}{% if
+                            submission['work_text']|length > 60 %}...{% endif %}</div>
+                    </td>
+                    <td>
+                        {% if submission['file_path'] %}
+                        <a href="{{ url_for('download_file', filename=submission['file_path']|filename) }}"
+                            class="file-link">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="7 10 12 15 17 10" />
+                                <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                            Download
+                        </a>
+                        {% else %}
+                        <span class="text-muted">No file</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="time-text">{{ submission['created_at']|format_dt }}</span>
+                    </td>
+                    <td>
+                        <div style="display: flex; gap: 5px;">
+                            <a href="{{ url_for('edit_report', report_id=submission['id']) }}" class="btn btn-ghost"
+                                style="padding: 4px 8px; font-size: 0.8rem;">Edit</a>
+                            <form action="{{ url_for('delete_report', report_id=submission['id']) }}" method="POST"
+                                onsubmit="return confirm('Delete this report?');" style="display:inline;">
+                                <button type="submit" class="btn btn-ghost"
+                                    style="padding: 4px 8px; font-size: 0.8rem; color: var(--error); border-color: var(--error);">Del</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+            <polyline points="10 9 9 9 8 9" />
+        </svg>
+        <h3>No submissions yet</h3>
+        <p>Your submitted work reports will appear here</p>
+    </div>
+    {% endif %}
+</div>
 </div>
 {% endblock %}

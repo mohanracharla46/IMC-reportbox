@@ -21,7 +21,142 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Initialize button ripples
     initializeButtonRipples();
+
+    // Initialize client selection logic
+    initializeClientSelection();
 });
+
+// ========== Client Selection Logic ==========
+function initializeClientSelection() {
+    const categorySelect = document.getElementById('client_category');
+    const nameSelect = document.getElementById('client_name');
+    const otherGroup = document.getElementById('other_client_group');
+    const otherInput = document.getElementById('other_client_name');
+    const workTypeSelect = document.getElementById('work_type');
+    const otherWorkGroup = document.getElementById('other_work_type_group');
+    const otherWorkInput = document.getElementById('other_work_type_name');
+
+    if (!categorySelect || !nameSelect || !workTypeSelect) return;
+
+    const clientOptions = {
+        'Political': ['RMR', 'RSR', 'SG', 'JKR', 'Degala', 'Others'],
+        'Corporate': ['IMC', 'Cornext', 'AIC', 'Yuvatha', 'Raksha', 'Other']
+    };
+
+    const workTypeOptions = {
+        'Political': [
+            'Shoot with Camera', 'Calendar Poster', 'Informative Poster', 'Elevation Poster',
+            'Reel', 'Press Conference Shoot', 'Regular Video', 'Cinematic Videos',
+            'Brochures', 'Printing Material', 'Shoot on Mobile', 'Other'
+        ],
+        'Corporate': [
+            'Shoot with Camera', 'Video', 'Reel', 'Poster', 'Web Development',
+            'Brochure', 'Shoot on Mobile', 'Print Material', 'Other'
+        ]
+    };
+
+    function updateClientNames() {
+        const category = categorySelect.value;
+        const previousValue = nameSelect.getAttribute('data-initial-value') || nameSelect.value;
+
+        // Clear existing options except the first one
+        nameSelect.innerHTML = '<option value="" disabled selected>Select client name</option>';
+
+        if (category && clientOptions[category]) {
+            clientOptions[category].forEach(client => {
+                const option = document.createElement('option');
+                option.value = client;
+                option.textContent = client;
+                nameSelect.appendChild(option);
+            });
+
+            // If we have an initial value (for edit mode), try to select it
+            if (previousValue) {
+                const exists = Array.from(nameSelect.options).some(opt => opt.value === previousValue);
+                if (exists) {
+                    nameSelect.value = previousValue;
+                } else if (previousValue !== "") {
+                    // If it doesn't exist in the list, it must be an "Other" value
+                    nameSelect.value = category === 'Political' ? 'Others' : 'Other';
+                    otherInput.value = previousValue;
+                }
+            }
+        }
+
+        // Trigger other group visibility check
+        handleClientNameChange();
+
+        // Update work types
+        updateWorkTypes(category);
+    }
+
+    function updateWorkTypes(category) {
+        if (!workTypeSelect) return;
+
+        const previousWorkType = workTypeSelect.getAttribute('data-initial-value') || workTypeSelect.value;
+
+        workTypeSelect.innerHTML = '<option value="" disabled selected>Select work type</option>';
+
+        if (category && workTypeOptions[category]) {
+            workTypeOptions[category].forEach(type => {
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = type;
+                workTypeSelect.appendChild(option);
+            });
+
+            // Restore previous selection if valid (for edit mode)
+            if (previousWorkType) {
+                const exists = Array.from(workTypeSelect.options).some(opt => opt.value === previousWorkType);
+                if (exists) {
+                    workTypeSelect.value = previousWorkType;
+                } else if (previousWorkType !== "") {
+                    // If it doesn't exist in the list check for "Other" logic manually
+                    // But typically "Other" is in the list.
+                    // If stored value is custom text, selecting "Other" and filling input
+                    workTypeSelect.value = 'Other';
+                    otherWorkInput.value = previousWorkType;
+                }
+            }
+        }
+        handleWorkTypeChange();
+    }
+
+    function handleClientNameChange() {
+        const clientName = nameSelect.value;
+        const isOther = clientName === 'Others' || clientName === 'Other';
+
+        if (isOther) {
+            otherGroup.style.display = 'block';
+            otherInput.required = true;
+        } else {
+            otherGroup.style.display = 'none';
+            otherInput.required = false;
+        }
+    }
+
+    function handleWorkTypeChange() {
+        const workType = workTypeSelect.value;
+        const isOther = workType === 'Other';
+
+        if (isOther) {
+            otherWorkGroup.style.display = 'block';
+            otherWorkInput.required = true;
+        } else {
+            otherWorkGroup.style.display = 'none';
+            otherWorkInput.required = false;
+        }
+    }
+
+    categorySelect.addEventListener('change', updateClientNames);
+    nameSelect.addEventListener('change', handleClientNameChange);
+    workTypeSelect.addEventListener('change', handleWorkTypeChange);
+
+    // Run once on load to handle initial values (especially for edit page)
+    if (categorySelect.value) {
+        updateClientNames();
+    }
+}
 
 // ========== Date Display ==========
 function displayCurrentDate() {
@@ -99,7 +234,7 @@ function formatFileSize(bytes) {
 }
 
 // ========== Tab Switching ==========
-function switchTab(tabName) {
+function switchTab(tabName, eventObj = null) {
     // Hide all tab contents
     const tabContents = document.querySelectorAll('.tab-content');
     tabContents.forEach(content => {
@@ -119,7 +254,14 @@ function switchTab(tabName) {
     }
 
     // Add active class to clicked button
-    event.currentTarget.classList.add('active');
+    const evt = eventObj || window.event;
+    if (evt && evt.currentTarget) {
+        evt.currentTarget.classList.add('active');
+    } else if (evt && evt.target) {
+        // Fallback for cases where currentTarget might be lost
+        const btn = evt.target.closest('.tab-btn');
+        if (btn) btn.classList.add('active');
+    }
 }
 
 // ========== Modal Functions ==========
