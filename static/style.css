@@ -1612,6 +1612,7 @@ body {
     .flash-container {
         left: var(--spacing-md);
         right: var(--spacing-md);
+        transform: none;
         max-width: none;
     }
 
