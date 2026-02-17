@@ -16,7 +16,9 @@
                 <line x1="8" y1="2" x2="8" y2="6" />
                 <line x1="3" y1="10" x2="21" y2="10" />
             </svg>
-            <span id="current-date"></span>
+            <input type="date" name="submission_date" id="submission-date" form="report-form"
+                value="{{ now.strftime('%Y-%m-%d') }}" max="{{ now.strftime('%Y-%m-%d') }}" required
+                style="background: transparent; border: 1px solid var(--gray-300); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 0.9rem; color: var(--text-primary);">
         </div>
     </div>
 
@@ -66,7 +68,7 @@
                 <h2 class="card-title">Submit Work Report</h2>
                 <p class="card-subtitle">You can submit multiple reports per day</p>
             </div>
-            <form method="POST" action="{{ url_for('submit_report') }}" enctype="multipart/form-data"
+            <form id="report-form" method="POST" action="{{ url_for('submit_report') }}" enctype="multipart/form-data"
                 class="report-form" style="padding: var(--spacing-xl);">
 
                 <!-- 1. Client Category -->

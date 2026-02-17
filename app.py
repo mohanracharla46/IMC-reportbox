@@ -282,7 +282,8 @@ def login():
             return render_template('login.html')
         
         conn = get_db_connection()
-        user = execute_query(conn, 'SELECT * FROM users WHERE name = ?', (name.strip(),)).fetchone()
+        # Case-insensitive login
+        user = execute_query(conn, 'SELECT * FROM users WHERE LOWER(name) = LOWER(?)', (name.strip(),)).fetchone()
         conn.close()
         
         if not user:
@@ -371,6 +372,18 @@ def submit_report():
     
     today = date.today().isoformat()
     
+    # Allow backdating if provided
+    submission_date = request.form.get('submission_date')
+    if submission_date:
+        try:
+            submission_dt = datetime.strptime(submission_date, '%Y-%m-%d').date()
+            if submission_dt > date.today():
+                flash('Cannot submit reports for future dates.', 'error')
+                return redirect(url_for('employee_dashboard'))
+            today = submission_date
+        except ValueError:
+            pass # Keep today as default if invalid format
+    
     # Handle 'Other' client name
     if client_name in ['Others', 'Other'] and other_client_name:
         client_name = other_client_name
@@ -421,8 +434,8 @@ def submit_report():
     # Insert new submission
     try:
         execute_query(conn, 
-            'INSERT INTO submissions (user_id, work_text, client_category, client_name, work_type, quantity, file_path, date, submission_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            (session['user_id'], work_text, client_category, client_name, work_type, quantity, file_path, today, submission_number)
+            'INSERT INTO submissions (user_id, work_text, client_category, client_name, work_type, quantity, file_path, date, submission_number, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            (session['user_id'], work_text, client_category, client_name, work_type, quantity, file_path, today, submission_number, datetime.now())
         )
         conn.commit()
         flash(f'Work report #{submission_number} submitted successfully!', 'success')
@@ -441,7 +454,9 @@ def admin_dashboard():
     
     # Get filter parameters
     employee_filter = request.args.get('employee', '')
-    date_filter = request.args.get('date', '')
+    start_date = request.args.get('start_date', '')
+    end_date = request.args.get('end_date', '')
+    employment_type_filter = request.args.get('employment_type', 'both')
     
     # Build query
     query = '''
@@ -453,12 +468,20 @@ def admin_dashboard():
     params = []
     
     if employee_filter:
-        query += ' AND u.name LIKE ?'
+        query += ' AND LOWER(u.name) LIKE LOWER(?)'
         params.append(f'%{employee_filter}%')
     
-    if date_filter:
-        query += ' AND s.date = ?'
-        params.append(date_filter)
+    if start_date:
+        query += ' AND s.date >= ?'
+        params.append(start_date)
+        
+    if end_date:
+        query += ' AND s.date <= ?'
+        params.append(end_date)
+        
+    if employment_type_filter and employment_type_filter != 'both':
+        query += ' AND u.employment_type = ?'
+        params.append(employment_type_filter)
     
     query += ' ORDER BY s.date DESC, s.created_at DESC'
     
@@ -526,7 +549,9 @@ def admin_dashboard():
         total_freelancers=len(freelancers),
         today_submissions=today_submissions,
         employee_filter=employee_filter,
-        date_filter=date_filter
+        start_date=start_date,
+        end_date=end_date,
+        employment_type_filter=employment_type_filter
     )
 
 @app.route('/admin/employee/add', methods=['POST'])
@@ -546,7 +571,7 @@ def add_employee():
     
     
     # Check if name or email already exists
-    existing_name = execute_query(conn, 'SELECT * FROM users WHERE name = ?', (name,)).fetchone()
+    existing_name = execute_query(conn, 'SELECT * FROM users WHERE LOWER(name) = LOWER(?)', (name,)).fetchone()
     existing_email = execute_query(conn, 'SELECT * FROM users WHERE email = ?', (email,)).fetchone()
     
     if existing_name:
@@ -607,7 +632,7 @@ def edit_employee(employee_id):
 
     # Check if new name is already taken by another user
     if name != employee['name']:
-        existing_name = execute_query(conn, 'SELECT * FROM users WHERE name = ? AND id != ?', (name, employee_id)).fetchone()
+        existing_name = execute_query(conn, 'SELECT * FROM users WHERE LOWER(name) = LOWER(?) AND id != ?', (name, employee_id)).fetchone()
         if existing_name:
             flash('Name already in use by another employee.', 'error')
             conn.close()
@@ -882,7 +907,9 @@ def download_filtered_reports():
     from flask import make_response
     
     employee_filter = request.args.get('employee', '')
-    date_filter = request.args.get('date', '')
+    start_date = request.args.get('start_date', '')
+    end_date = request.args.get('end_date', '')
+    employment_type_filter = request.args.get('employment_type', 'both')
     
     conn = get_db_connection()
     
@@ -906,12 +933,20 @@ def download_filtered_reports():
     
     params = []
     if employee_filter:
-        query += ' AND u.name LIKE ?'
+        query += ' AND LOWER(u.name) LIKE LOWER(?)'
         params.append(f'%{employee_filter}%')
     
-    if date_filter:
-        query += ' AND s.date = ?'
-        params.append(date_filter)
+    if start_date:
+        query += ' AND s.date >= ?'
+        params.append(start_date)
+        
+    if end_date:
+        query += ' AND s.date <= ?'
+        params.append(end_date)
+        
+    if employment_type_filter and employment_type_filter != 'both':
+        query += ' AND u.employment_type = ?'
+        params.append(employment_type_filter)
         
     query += ' ORDER BY s.date DESC, s.created_at DESC'
     
