@@ -249,6 +249,7 @@ body {
     font-size: 0.9375rem;
     font-weight: 500;
     color: var(--gray-800);
+    text-align: center;
 }
 
 .flash-close {
@@ -541,11 +542,13 @@ body {
     font-weight: 700;
     color: var(--gray-900);
     margin-bottom: var(--spacing-sm);
+    text-align: center;
 }
 
 .auth-subtitle {
     color: var(--gray-600);
     font-size: 0.9375rem;
+    text-align: center;
 }
 
 .auth-form {
