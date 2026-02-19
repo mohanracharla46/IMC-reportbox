@@ -74,14 +74,14 @@ function initializeNavToggle() {
 }
 
 // ========== Client Selection Logic ==========
-function initializeClientSelection() {
-    const categorySelect = document.getElementById('client_category');
-    const nameSelect = document.getElementById('client_name');
-    const otherGroup = document.getElementById('other_client_group');
-    const otherInput = document.getElementById('other_client_name');
-    const workTypeSelect = document.getElementById('work_type');
-    const otherWorkGroup = document.getElementById('other_work_type_group');
-    const otherWorkInput = document.getElementById('other_work_type_name');
+function setupClientSelection(prefix = '') {
+    const categorySelect = document.getElementById(prefix + 'client_category');
+    const nameSelect = document.getElementById(prefix + 'client_name');
+    const otherGroup = document.getElementById(prefix + 'other_client_group');
+    const otherInput = document.getElementById(prefix + 'other_client_name');
+    const workTypeSelect = document.getElementById(prefix + 'work_type');
+    const otherWorkGroup = document.getElementById(prefix + 'other_work_type_group');
+    const otherWorkInput = document.getElementById(prefix + 'other_work_type_name');
 
     if (!categorySelect || !nameSelect || !workTypeSelect) return;
 
@@ -125,7 +125,7 @@ function initializeClientSelection() {
                 } else if (previousValue !== "") {
                     // If it doesn't exist in the list, it must be an "Other" value
                     nameSelect.value = category === 'Political' ? 'Others' : 'Other';
-                    otherInput.value = previousValue;
+                    if (otherInput) otherInput.value = previousValue;
                 }
             }
         }
@@ -159,10 +159,8 @@ function initializeClientSelection() {
                     workTypeSelect.value = previousWorkType;
                 } else if (previousWorkType !== "") {
                     // If it doesn't exist in the list check for "Other" logic manually
-                    // But typically "Other" is in the list.
-                    // If stored value is custom text, selecting "Other" and filling input
                     workTypeSelect.value = 'Other';
-                    otherWorkInput.value = previousWorkType;
+                    if (otherWorkInput) otherWorkInput.value = previousWorkType;
                 }
             }
         }
@@ -170,28 +168,30 @@ function initializeClientSelection() {
     }
 
     function handleClientNameChange() {
+        if (!nameSelect || !otherGroup) return;
         const clientName = nameSelect.value;
         const isOther = clientName === 'Others' || clientName === 'Other';
 
         if (isOther) {
             otherGroup.style.display = 'block';
-            otherInput.required = true;
+            if (otherInput) otherInput.required = true;
         } else {
             otherGroup.style.display = 'none';
-            otherInput.required = false;
+            if (otherInput) otherInput.required = false;
         }
     }
 
     function handleWorkTypeChange() {
+        if (!workTypeSelect || !otherWorkGroup) return;
         const workType = workTypeSelect.value;
         const isOther = workType === 'Other';
 
         if (isOther) {
             otherWorkGroup.style.display = 'block';
-            otherWorkInput.required = true;
+            if (otherWorkInput) otherWorkInput.required = true;
         } else {
             otherWorkGroup.style.display = 'none';
-            otherWorkInput.required = false;
+            if (otherWorkInput) otherWorkInput.required = false;
         }
     }
 
@@ -203,6 +203,13 @@ function initializeClientSelection() {
     if (categorySelect.value) {
         updateClientNames();
     }
+}
+
+function initializeClientSelection() {
+    // Initialize for standard form (employee dashboard & edit page)
+    setupClientSelection('');
+    // Initialize for admin dashboard direct submission form
+    setupClientSelection('admin_');
 }
 
 // ========== Date Display ==========
@@ -298,6 +305,10 @@ function switchTab(tabName, eventObj = null) {
     const selectedTab = document.getElementById(`${tabName}-tab`);
     if (selectedTab) {
         selectedTab.classList.add('active');
+        // Add animation class
+        selectedTab.classList.remove('scale-up');
+        void selectedTab.offsetWidth; // Trigger reflow
+        selectedTab.classList.add('scale-up');
     }
 
     // Add active class to clicked button
@@ -389,7 +400,7 @@ function closeModal(modalId) {
         modal.style.opacity = '0';
         const content = modal.querySelector('.modal-content');
         if (content) {
-            content.style.transform = 'scale(0.9) translateY(20px)';
+            content.style.transform = 'scale(0.95) translateY(20px)';
             content.style.opacity = '0';
         }
 
@@ -402,12 +413,39 @@ function closeModal(modalId) {
                 content.style.opacity = '';
             }
 
-            // Reset form if exists
-            const form = modal.querySelector('form');
-            if (form) {
-                form.reset();
+            // Reset form if exists (but not the delete form which is dynamic)
+            if (modalId !== 'deleteConfirmModal') {
+                const form = modal.querySelector('form');
+                if (form) {
+                    form.reset();
+                }
             }
         }, 300);
+    }
+}
+
+// ========== Delete Confirmation Logic ==========
+function showDeleteConfirm(deleteUrl, title = 'Confirm Deletion', message = 'Are you sure you want to delete this? This action cannot be undone.') {
+    const modal = document.getElementById('deleteConfirmModal');
+    const form = document.getElementById('deleteConfirmForm');
+
+    if (modal && form) {
+        form.action = deleteUrl;
+
+        // Update text if elements exist
+        const titleEl = modal.querySelector('.modal-title');
+        const bodyEl = modal.querySelector('.modal-body p');
+        if (titleEl) titleEl.textContent = title;
+        if (bodyEl) bodyEl.textContent = message;
+
+        modal.classList.add('active');
+        document.body.classList.add('no-scroll');
+
+        // Add specific entrance animation class
+        const content = modal.querySelector('.modal-content');
+        if (content) {
+            content.classList.add('scale-up');
+        }
     }
 }
 

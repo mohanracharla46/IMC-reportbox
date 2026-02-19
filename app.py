@@ -59,7 +59,6 @@ def calculate_submission_amount(work_type, quantity, employment_type):
         'Video': 1500,
         'Brochure': 1000,
         'Print Material': 500,
-        'Web Development': 1200,
         'Other': 0
     }
     
@@ -175,7 +174,8 @@ def init_db():
         ('client_category', 'submissions', 'TEXT'),
         ('client_name', 'submissions', 'TEXT'),
         ('work_type', 'submissions', 'TEXT'),
-        ('quantity', 'submissions', 'INTEGER DEFAULT 1')
+        ('quantity', 'submissions', 'INTEGER DEFAULT 1'),
+        ('employee_name', 'submissions', 'TEXT')
     ]:
         try:
             cursor.execute(f'ALTER TABLE {table} ADD COLUMN {column} {definition}')
@@ -460,7 +460,10 @@ def admin_dashboard():
     
     # Build query
     query = '''
-        SELECT s.*, u.name as employee_name, u.email as employee_email, u.employment_type
+        SELECT s.*, 
+               COALESCE(s.employee_name, u.name) as display_name,
+               u.email as employee_email, 
+               u.employment_type
         FROM submissions s
         JOIN users u ON s.user_id = u.id
         WHERE 1=1
@@ -468,8 +471,8 @@ def admin_dashboard():
     params = []
     
     if employee_filter:
-        query += ' AND LOWER(u.name) LIKE LOWER(?)'
-        params.append(f'%{employee_filter}%')
+        query += ' AND (LOWER(u.name) LIKE LOWER(?) OR LOWER(s.employee_name) LIKE LOWER(?))'
+        params.extend([f'%{employee_filter}%', f'%{employee_filter}%'])
     
     if start_date:
         query += ' AND s.date >= ?'
@@ -551,8 +554,140 @@ def admin_dashboard():
         employee_filter=employee_filter,
         start_date=start_date,
         end_date=end_date,
-        employment_type_filter=employment_type_filter
+        employment_type_filter=employment_type_filter,
+        now=datetime.now()
     )
+
+@app.route('/admin/submit', methods=['POST'])
+@admin_required
+def admin_submit_report():
+    """Handle work report submission by admin for their own work (Self Work)"""
+    employee_name = request.form.get('employee_name', '').strip()
+    work_text = request.form.get('work_text', '').strip()
+    client_category = request.form.get('client_category', '').strip()
+    client_name = request.form.get('client_name', '').strip()
+    other_client_name = request.form.get('other_client_name', '').strip()
+    work_type = request.form.get('work_type', '').strip()
+    other_work_type_name = request.form.get('other_work_type_name', '').strip()
+    quantity = request.form.get('quantity', 1)
+    submission_date = request.form.get('submission_date')
+    
+    user_id = session['user_id'] # Use the admin's own ID
+    today = date.today().isoformat()
+    
+    if submission_date:
+        try:
+            submission_dt = datetime.strptime(submission_date, '%Y-%m-%d').date()
+            if submission_dt > date.today():
+                flash('Cannot submit reports for future dates.', 'error')
+                return redirect(url_for('admin_dashboard'))
+            today = submission_date
+        except ValueError:
+            pass
+            
+    # Handle 'Other' client name
+    if client_name in ['Others', 'Other'] and other_client_name:
+        client_name = other_client_name
+
+    # Handle 'Other' work type
+    if work_type == 'Other' and other_work_type_name:
+        work_type = other_work_type_name
+
+    if not work_text or not client_name:
+        flash('Please provide work description and client name.', 'error')
+        return redirect(url_for('admin_dashboard'))
+    
+    # Handle file upload
+    file_path = None
+    if 'file' in request.files:
+        file = request.files['file']
+        if file and file.filename and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"admin_{user_id}_{timestamp}_{filename}"
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(file_path)
+    
+    conn = get_db_connection()
+    # Check for duplicate submission
+    existing_check = execute_query(conn, 
+        '''SELECT id FROM submissions 
+           WHERE user_id = ? AND date = ? AND work_text = ? AND client_name = ? AND work_type = ?''',
+        (user_id, today, work_text, client_name, work_type)
+    ).fetchone()
+    
+    if existing_check:
+        conn.close()
+        flash('An identical report already exists for today.', 'info')
+        return redirect(url_for('admin_dashboard'))
+    
+    # Get submission count
+    res = execute_query(conn, 
+        'SELECT COUNT(*) as count FROM submissions WHERE user_id = ? AND date = ?',
+        (user_id, today)
+    ).fetchone()
+    submission_number = res['count'] + 1
+    
+    try:
+        execute_query(conn, 
+            'INSERT INTO submissions (user_id, work_text, client_category, client_name, work_type, quantity, file_path, date, submission_number, created_at, employee_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            (user_id, work_text, client_category, client_name, work_type, quantity, file_path, today, submission_number, datetime.now(), employee_name)
+        )
+        conn.commit()
+        flash(f'Self Work report #{submission_number} submitted successfully!', 'success')
+    except Exception as e:
+        flash(f'Error submitting report: {str(e)}', 'error')
+    finally:
+        conn.close()
+    
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/export-self-work')
+@admin_required
+def export_self_work():
+    """Download reports submitted by admins (Self Work) as Excel"""
+    from flask import make_response
+    conn = get_db_connection()
+    
+    query = '''
+        SELECT s.date as "Date", 
+               s.employee_name as "Submitted Name",
+               u.name as "Admin User",
+               s.client_category as "Category",
+               s.client_name as "Client",
+               s.work_type as "Work Type",
+               s.quantity as "Qty",
+               s.work_text as "Description",
+               s.created_at as "Submitted At"
+        FROM submissions s
+        JOIN users u ON s.user_id = u.id
+        WHERE u.role = 'admin'
+        ORDER BY s.date DESC, s.created_at DESC
+    '''
+    
+    df = pd.read_sql_query(query, conn)
+    conn.close()
+    
+    if df.empty:
+        flash('No self work reports found to export.', 'info')
+        return redirect(url_for('admin_dashboard'))
+
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Self Work Reports')
+        worksheet = writer.sheets['Self Work Reports']
+        for i, col in enumerate(df.columns):
+            max_len = df[col].astype(str).map(len).max()
+            column_len = max(max_len, len(str(col))) + 2
+            col_letter = chr(65 + i)
+            worksheet.column_dimensions[col_letter].width = min(column_len, 50)
+
+    output.seek(0)
+    response = make_response(output.getvalue())
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    response.headers["Content-Disposition"] = f"attachment; filename=Self_Work_Export_{timestamp}.xlsx"
+    response.headers["Content-Type"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    return response
 
 @app.route('/admin/employee/add', methods=['POST'])
 @admin_required
@@ -933,8 +1068,8 @@ def download_filtered_reports():
     
     params = []
     if employee_filter:
-        query += ' AND LOWER(u.name) LIKE LOWER(?)'
-        params.append(f'%{employee_filter}%')
+        query += ' AND (LOWER(u.name) LIKE LOWER(?) OR LOWER(s.employee_name) LIKE LOWER(?))'
+        params.extend([f'%{employee_filter}%', f'%{employee_filter}%'])
     
     if start_date:
         query += ' AND s.date >= ?'

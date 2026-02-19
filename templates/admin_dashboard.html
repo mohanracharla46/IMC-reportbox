@@ -89,6 +89,13 @@
             </svg>
             Manage Freelancers
         </button>
+        <button class="tab-btn" onclick="switchTab('direct-submission', event)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+            Submit Work
+        </button>
     </div>
 
     <!-- Submissions Tab -->
@@ -101,7 +108,7 @@
                 </div>
                 <div class="card-actions">
                     <form method="GET" class="filter-form-inline">
-                        <button type="submit" class="btn btn-primary">
+                        <button type="submit" form="filter-form-main" class="btn btn-primary">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2">
                                 <circle cx="11" cy="11" r="8" />
@@ -121,13 +128,23 @@
                             </svg>
                             Export Excel
                         </a>
+                        <a href="{{ url_for('export_self_work') }}" class="btn btn-ghost"
+                            style="color: var(--primary); border-color: var(--primary);">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="7 10 12 15 17 10" />
+                                <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                            Export Self Work
+                        </a>
                         <a href="{{ url_for('admin_dashboard') }}" class="btn btn-ghost">Clear</a>
                     </form>
                 </div>
             </div>
 
             <!-- Filters -->
-            <form method="GET" class="filter-form">
+            <form method="GET" id="filter-form-main" class="filter-form">
                 <div class="filter-grid">
                     <div class="form-group">
                         <label for="employee" class="form-label">Employee Name</label>
@@ -136,7 +153,8 @@
                     </div>
                     <div class="form-group">
                         <label for="employment_type" class="form-label">Type</label>
-                        <select id="employment_type" name="employment_type" class="form-input">
+                        <select id="employment_type" name="employment_type" class="form-input"
+                            onchange="this.form.submit()">
                             <option value="both" {% if employment_type_filter=='both' %}selected{% endif %}>Both
                             </option>
                             <option value="inhouse" {% if employment_type_filter=='inhouse' %}selected{% endif %}>
@@ -147,12 +165,13 @@
                     </div>
                     <div class="form-group">
                         <label for="start_date" class="form-label">Start Date</label>
-                        <input type="date" id="start_date" name="start_date" class="form-input"
-                            value="{{ start_date }}">
+                        <input type="date" id="start_date" name="start_date" class="form-input" value="{{ start_date }}"
+                            onchange="this.form.submit()">
                     </div>
                     <div class="form-group">
                         <label for="end_date" class="form-label">End Date</label>
-                        <input type="date" id="end_date" name="end_date" class="form-input" value="{{ end_date }}">
+                        <input type="date" id="end_date" name="end_date" class="form-input" value="{{ end_date }}"
+                            onchange="this.form.submit()">
                     </div>
                 </div>
             </form>
@@ -180,9 +199,9 @@
                         <tr>
                             <td>
                                 <div class="employee-cell">
-                                    <div class="employee-avatar">{{ submission['employee_name'][0] }}</div>
+                                    <div class="employee-avatar">{{ (submission['display_name'] or 'A')[0] }}</div>
                                     <div class="employee-info">
-                                        <div class="employee-name">{{ submission['employee_name'] }}</div>
+                                        <div class="employee-name">{{ submission['display_name'] }}</div>
                                         <div class="employee-email">{{ submission['employee_email'] }}</div>
                                     </div>
                                 </div>
@@ -231,12 +250,10 @@
                                 <div style="display: flex; gap: 5px;">
                                     <a href="{{ url_for('edit_report', report_id=submission['id']) }}"
                                         class="btn btn-ghost" style="padding: 4px 8px; font-size: 0.8rem;">Edit</a>
-                                    <form action="{{ url_for('delete_report', report_id=submission['id']) }}"
-                                        method="POST" onsubmit="return confirm('Delete this report?');"
-                                        style="display:inline;">
-                                        <button type="submit" class="btn btn-ghost"
-                                            style="padding: 4px 8px; font-size: 0.8rem; color: var(--error); border-color: var(--error);">Del</button>
-                                    </form>
+                                    <button type="button" class="btn btn-ghost"
+                                        style="padding: 4px 8px; font-size: 0.8rem; color: var(--error); border-color: var(--error);"
+                                        data-delete-url="{{ url_for('delete_report', report_id=submission['id']) }}"
+                                        onclick="showDeleteConfirm(this.dataset.deleteUrl, 'Delete Report')">Del</button>
                                 </div>
                             </td>
                         </tr>
@@ -332,11 +349,9 @@
                                         </svg>
                                         Edit
                                     </button>
-                                    <form method="POST"
-                                        action="{{ url_for('delete_employee', employee_id=employee['id']) }}"
-                                        style="display: inline;" onsubmit="return confirm('Delete this employee?');">
-                                        <button type="submit" class="btn btn-sm btn-danger">Del</button>
-                                    </form>
+                                    <button type="button" class="btn btn-sm btn-danger"
+                                        data-delete-url="{{ url_for('delete_employee', employee_id=employee['id']) }}"
+                                        onclick="showDeleteConfirm(this.dataset.deleteUrl, 'Delete Employee', 'Are you sure you want to delete this employee? This will also remove all their associated reports.')">Del</button>
                                 </div>
                             </td>
                         </tr>
@@ -427,11 +442,9 @@
                                         </svg>
                                         Edit
                                     </button>
-                                    <form method="POST"
-                                        action="{{ url_for('delete_employee', employee_id=freelancer['id']) }}"
-                                        style="display: inline;" onsubmit="return confirm('Delete this freelancer?');">
-                                        <button type="submit" class="btn btn-sm btn-danger">Del</button>
-                                    </form>
+                                    <button type="button" class="btn btn-sm btn-danger"
+                                        data-delete-url="{{ url_for('delete_employee', employee_id=freelancer['id']) }}"
+                                        onclick="showDeleteConfirm(this.dataset.deleteUrl, 'Delete Freelancer', 'Are you sure you want to delete this freelancer? This will also remove all their associated reports.')">Del</button>
                                 </div>
                             </td>
                         </tr>
@@ -449,6 +462,139 @@
                 <p>Add your first freelancer to get started</p>
             </div>
             {% endif %}
+        </div>
+    </div>
+
+    <!-- Direct Submission Tab -->
+    <div id="direct-submission-tab" class="tab-content">
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Submit Self Work Report</h2>
+                <p class="card-subtitle">Track your own daily work directly</p>
+                <div class="card-actions">
+                    <a href="{{ url_for('export_self_work') }}" class="btn btn-ghost"
+                        style="color: var(--primary); border-color: var(--primary);">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                        Export Self Work
+                    </a>
+                </div>
+            </div>
+            <form id="admin-report-form" method="POST" action="{{ url_for('admin_submit_report') }}"
+                enctype="multipart/form-data" class="report-form" style="padding: var(--spacing-xl);">
+
+                <!-- Employee Name Field (Self-Identification) -->
+                <div class="form-grid"
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
+                    <div class="form-group">
+                        <label for="admin_employee_name" class="form-label">Employee Name <span
+                                style="color: var(--error);">*</span></label>
+                        <input type="text" id="admin_employee_name" name="employee_name" class="form-input"
+                            placeholder="Enter your name/role..." value="{{ session['user_name'] }}" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="admin_submission_date" class="form-label">Submission Date <span
+                                style="color: var(--error);">*</span></label>
+                        <input type="date" id="admin_submission_date" name="submission_date" class="form-input"
+                            value="{{ now.strftime('%Y-%m-%d') }}" max="{{ now.strftime('%Y-%m-%d') }}" required>
+                    </div>
+                </div>
+
+                <!-- Client Category & Name -->
+                <div class="form-grid"
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
+                    <div class="form-group">
+                        <label for="admin_client_category" class="form-label">Client Category <span
+                                style="color: var(--error);">*</span></label>
+                        <select id="admin_client_category" name="client_category" class="form-input" required>
+                            <option value="" disabled selected>Select category</option>
+                            <option value="Political">Political</option>
+                            <option value="Corporate">Corporate</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="admin_client_name" class="form-label">Client Name <span
+                                style="color: var(--error);">*</span></label>
+                        <select id="admin_client_name" name="client_name" class="form-input" required>
+                            <option value="" disabled selected>Select client category first</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="admin_other_client_group" class="form-group" style="display: none; margin-bottom: 1.5rem;">
+                    <label for="admin_other_client_name" class="form-label">Other Client Name <span
+                            style="color: var(--error);">*</span></label>
+                    <input type="text" id="admin_other_client_name" name="other_client_name" class="form-input"
+                        placeholder="Enter client name manually...">
+                </div>
+
+                <!-- Work Type -->
+                <div class="form-group" style="margin-bottom: 1.5rem;">
+                    <label for="admin_work_type" class="form-label">Work Type <span
+                            style="color: var(--error);">*</span></label>
+                    <select id="admin_work_type" name="work_type" class="form-input" required>
+                        <option value="" disabled selected>Select category first</option>
+                    </select>
+                </div>
+
+                <div id="admin_other_work_type_group" class="form-group" style="display: none; margin-bottom: 1.5rem;">
+                    <label for="admin_other_work_type_name" class="form-label">Other Work Type <span
+                            style="color: var(--error);">*</span></label>
+                    <input type="text" id="admin_other_work_type_name" name="other_work_type_name" class="form-input"
+                        placeholder="Enter work type manually...">
+                </div>
+
+                <!-- Quantity & Attachment -->
+                <div class="form-grid"
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
+                    <div class="form-group">
+                        <label for="admin_quantity" class="form-label">Quantity / Count <span
+                                style="color: var(--error);">*</span></label>
+                        <input type="number" id="admin_quantity" name="quantity" class="form-input" value="1" min="1"
+                            required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="admin_file" class="form-label">Attachment (Optional)</label>
+                        <div class="file-upload">
+                            <input type="file" id="admin_file" name="file" class="file-input"
+                                accept=".txt,.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif">
+                            <label for="admin_file" class="file-label" style="height: 42px;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="17 8 12 3 7 8" />
+                                    <line x1="12" y1="3" x2="12" y2="15" />
+                                </svg>
+                                <span class="file-text">Choose file</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Work Description -->
+                <div class="form-group" style="margin-bottom: 1.5rem;">
+                    <label for="admin_work_text" class="form-label">Work Description <span
+                            style="color: var(--error);">*</span></label>
+                    <textarea id="admin_work_text" name="work_text" class="form-textarea" rows="4"
+                        placeholder="Describe the work..." required></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-full-mobile">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                        <polyline points="17 21 17 13 7 13 7 21" />
+                        <polyline points="7 3 7 8 15 8" />
+                    </svg>
+                    Submit Report
+                </button>
+            </form>
         </div>
     </div>
 </div>
