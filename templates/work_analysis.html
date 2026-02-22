@@ -1,0 +1,447 @@
+{% extends "base.html" %}
+
+{% block title %}Work Analysis - Work Report System{% endblock %}
+
+{% block content %}
+<style>
+    /* === Page Header === */
+    .wa-header {
+        display: flex;
+        align-items: center;
+        gap: 0.9rem;
+        margin-bottom: 1.8rem;
+    }
+
+    .wa-header-icon {
+        width: 42px;
+        height: 42px;
+        background: var(--primary-100);
+        border-radius: var(--radius-lg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--primary-700);
+        flex-shrink: 0;
+    }
+
+    .wa-header h1 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--gray-900);
+        margin: 0 0 2px;
+    }
+
+    .wa-header p {
+        font-size: 0.85rem;
+        color: var(--gray-500);
+        margin: 0;
+    }
+
+    /* === Filter Card === */
+    .wa-filter-card {
+        background: #fff;
+        border: 1px solid var(--gray-200);
+        border-radius: var(--radius-xl);
+        padding: 1.2rem 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 1px 6px rgba(0, 0, 0, 0.04);
+    }
+
+    .wa-filter-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.9rem;
+        align-items: flex-end;
+    }
+
+    .wa-field {
+        flex: 1 1 155px;
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+    }
+
+    .wa-field label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--gray-500);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .wa-field select,
+    .wa-field input {
+        padding: 0.48rem 0.75rem;
+        border: 1px solid var(--gray-200);
+        border-radius: var(--radius-md);
+        font-size: 0.875rem;
+        color: var(--gray-800);
+        background: var(--gray-50);
+        outline: none;
+        transition: border-color 0.15s, box-shadow 0.15s;
+        font-family: inherit;
+    }
+
+    .wa-field select:focus,
+    .wa-field input:focus {
+        border-color: var(--primary-400);
+        background: #fff;
+        box-shadow: 0 0 0 3px rgba(1, 181, 178, 0.1);
+    }
+
+    .wa-filter-btns {
+        display: flex;
+        gap: 0.5rem;
+        padding-bottom: 1px;
+    }
+
+    /* === Results Section === */
+    .wa-results-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 0.8rem;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .wa-results-title {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--gray-700);
+    }
+
+    .wa-results-meta {
+        font-size: 0.8rem;
+        color: var(--gray-400);
+    }
+
+    /* === Table === */
+    .wa-table-wrap {
+        overflow-x: auto;
+        border-radius: var(--radius-xl);
+        border: 1px solid var(--gray-200);
+        box-shadow: 0 1px 6px rgba(0, 0, 0, 0.04);
+        background: #fff;
+    }
+
+    .wa-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+        min-width: 600px;
+    }
+
+    .wa-table thead th {
+        background: var(--gray-50);
+        color: var(--gray-600);
+        font-weight: 600;
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 0.75rem 1rem;
+        text-align: left;
+        border-bottom: 1px solid var(--gray-200);
+        white-space: nowrap;
+    }
+
+    .wa-table thead th.num {
+        text-align: center;
+        min-width: 80px;
+    }
+
+    .wa-table thead th.total-head {
+        text-align: center;
+        color: var(--gray-700);
+    }
+
+    .wa-table tbody tr {
+        border-bottom: 1px solid var(--gray-100);
+        transition: background 0.12s;
+    }
+
+    .wa-table tbody tr:last-child {
+        border-bottom: none;
+    }
+
+    .wa-table tbody tr:hover {
+        background: #f8fffe;
+    }
+
+    .wa-table tbody td {
+        padding: 0.7rem 1rem;
+        color: var(--gray-800);
+        vertical-align: middle;
+    }
+
+    .wa-table tbody td.num {
+        text-align: center;
+    }
+
+    /* Name cell */
+    .wa-name {
+        font-weight: 600;
+        color: var(--gray-900);
+    }
+
+    /* Employment badge */
+    .wa-badge {
+        display: inline-block;
+        font-size: 0.7rem;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 999px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .wa-badge.inhouse {
+        background: #e0f2fe;
+        color: #0369a1;
+    }
+
+    .wa-badge.freelancer {
+        background: #fef9c3;
+        color: #854d0e;
+    }
+
+    /* Client text */
+    .wa-client {
+        color: var(--gray-600);
+        font-size: 0.85rem;
+    }
+
+    /* Quantity values */
+    .wa-qty {
+        font-weight: 600;
+        color: var(--primary-700);
+    }
+
+    .wa-zero {
+        color: var(--gray-300);
+    }
+
+    .wa-total {
+        font-weight: 700;
+        color: var(--gray-900);
+        background: var(--gray-50);
+    }
+
+    /* Footer row */
+    .wa-table tfoot tr td {
+        padding: 0.7rem 1rem;
+        border-top: 2px solid var(--gray-200);
+        background: var(--gray-50);
+        font-weight: 700;
+        font-size: 0.82rem;
+        color: var(--gray-700);
+        text-align: center;
+    }
+
+    .wa-table tfoot tr td.foot-label {
+        text-align: left;
+        color: var(--gray-500);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-size: 0.75rem;
+    }
+
+    .wa-grand {
+        color: #d97706;
+        font-weight: 700;
+    }
+
+    /* Empty state */
+    .wa-empty {
+        background: #fff;
+        border: 1px solid var(--gray-200);
+        border-radius: var(--radius-xl);
+        padding: 3rem 2rem;
+        text-align: center;
+        color: var(--gray-400);
+        box-shadow: 0 1px 6px rgba(0, 0, 0, 0.04);
+    }
+
+    .wa-empty p {
+        margin: 0.5rem 0 0;
+        font-size: 0.875rem;
+    }
+
+    .wa-empty svg {
+        opacity: 0.3;
+        margin-bottom: 0.75rem;
+    }
+</style>
+
+<div class="dashboard-container">
+
+    <!-- Header -->
+    <div class="wa-header">
+        <div class="wa-header-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="7" height="7" rx="1" />
+                <rect x="14" y="3" width="7" height="7" rx="1" />
+                <rect x="3" y="14" width="7" height="7" rx="1" />
+                <rect x="14" y="14" width="7" height="7" rx="1" />
+            </svg>
+        </div>
+        <div>
+            <h1>Work Analysis</h1>
+            <p>Track how many videos, posters, reels and more each person did per client</p>
+        </div>
+    </div>
+
+    <!-- Filter Card -->
+    <div class="wa-filter-card">
+        <form method="GET" action="{{ url_for('work_analysis') }}">
+            <div class="wa-filter-grid">
+
+                <div class="wa-field">
+                    <label for="wa_client">Client</label>
+                    <select id="wa_client" name="client">
+                        <option value="">All Clients</option>
+                        {% for client in all_clients %}
+                        <option value="{{ client }}" {% if filter_client==client %}selected{% endif %}>{{ client }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="wa-field">
+                    <label for="wa_person">Employee / Freelancer</label>
+                    <select id="wa_person" name="person">
+                        <option value="">All People</option>
+                        {% set inhouse = all_persons | selectattr('employment_type', 'equalto', 'inhouse') | list %}
+                        {% set freelancers_list = all_persons | selectattr('employment_type', 'ne', 'inhouse') | list %}
+                        {% if inhouse %}
+                        <optgroup label="Inhouse">
+                            {% for p in inhouse %}
+                            <option value="{{ p.name }}" {% if filter_person==p.name %}selected{% endif %}>{{ p.name }}
+                            </option>
+                            {% endfor %}
+                        </optgroup>
+                        {% endif %}
+                        {% if freelancers_list %}
+                        <optgroup label="Freelancers">
+                            {% for p in freelancers_list %}
+                            <option value="{{ p.name }}" {% if filter_person==p.name %}selected{% endif %}>{{ p.name }}
+                            </option>
+                            {% endfor %}
+                        </optgroup>
+                        {% endif %}
+                    </select>
+                </div>
+
+                <div class="wa-field">
+                    <label for="wa_start">Start Date</label>
+                    <input type="date" id="wa_start" name="start_date" value="{{ filter_start }}">
+                </div>
+
+                <div class="wa-field">
+                    <label for="wa_end">End Date</label>
+                    <input type="date" id="wa_end" name="end_date" value="{{ filter_end }}">
+                </div>
+
+                <div class="wa-filter-btns">
+                    <button type="submit" class="btn btn-primary">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2.5">
+                            <circle cx="11" cy="11" r="8" />
+                            <path d="m21 21-4.35-4.35" />
+                        </svg>
+                        Filter
+                    </button>
+                    <a href="{{ url_for('work_analysis') }}" class="btn btn-ghost">Clear</a>
+                </div>
+
+            </div>
+        </form>
+    </div>
+
+    <!-- Table / Empty -->
+    {% if table_rows and all_work_types %}
+
+    <div class="wa-results-header">
+        <span class="wa-results-title">Work Breakdown</span>
+        <span class="wa-results-meta">{{ table_rows | length }} row(s) &middot; {{ all_work_types | length }} work
+            type(s)</span>
+    </div>
+
+    <div class="wa-table-wrap">
+        <table class="wa-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Client</th>
+                    {% for wt in all_work_types %}
+                    <th class="num">{{ wt }}</th>
+                    {% endfor %}
+                    <th class="num total-head">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in table_rows %}
+                <tr>
+                    <td><span class="wa-name">{{ row.person_name }}</span></td>
+                    <td>
+                        <span class="wa-badge {{ row.employment_type or 'inhouse' }}">
+                            {{ row.employment_type | title if row.employment_type else 'Inhouse' }}
+                        </span>
+                    </td>
+                    <td><span class="wa-client">{{ row.client_name or '—' }}</span></td>
+                    {% for wt in all_work_types %}
+                    {% set qty = row.work_counts.get(wt, 0) %}
+                    <td class="num">
+                        {% if qty %}
+                        <span class="wa-qty">{{ qty }}</span>
+                        {% else %}
+                        <span class="wa-zero">—</span>
+                        {% endif %}
+                    </td>
+                    {% endfor %}
+                    <td class="num wa-total">{{ row.total }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    {% set grand = namespace(val=0) %}
+                    <td colspan="3" class="foot-label">Grand Total</td>
+                    {% for wt in all_work_types %}
+                    {% set col = namespace(val=0) %}
+                    {% for row in table_rows %}{% set col.val = col.val + row.work_counts.get(wt, 0) %}{% endfor %}
+                    {% set grand.val = grand.val + col.val %}
+                    <td>{% if col.val %}<span class="wa-grand">{{ col.val }}</span>{% else %}—{% endif %}</td>
+                    {% endfor %}
+                    <td><span class="wa-grand">{{ grand.val }}</span></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+
+    {% else %}
+    <div class="wa-empty">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.35-4.35" />
+        </svg>
+        {% if filter_client or filter_person or filter_start or filter_end %}
+        <p><strong>No data found.</strong> Try changing the filters above.</p>
+        {% else %}
+        <p>Select a client or person and click <strong>Filter</strong> to view the work breakdown.</p>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div style="margin-top: 1.5rem;">
+        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-ghost">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M19 12H5" />
+                <polyline points="12 19 5 12 12 5" />
+            </svg>
+            Back to Dashboard
+        </a>
+    </div>
+</div>
+{% endblock %}

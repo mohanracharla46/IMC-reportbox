@@ -1275,6 +1275,127 @@ def delete_report(report_id):
     conn.close()
     return redirect(url_for('index'))
 
+@app.route('/admin/work-analysis')
+@admin_required
+def work_analysis():
+    """Work Analysis - show how many of each work type each employee/freelancer did for a specific client"""
+    conn = get_db_connection()
+
+    # Filter parameters
+    filter_client = request.args.get('client', '').strip()
+    filter_person = request.args.get('person', '').strip()
+    filter_start = request.args.get('start_date', '').strip()
+    filter_end = request.args.get('end_date', '').strip()
+
+    # Get all distinct client names for the dropdown
+    all_clients_raw = execute_query(conn,
+        "SELECT DISTINCT client_name FROM submissions WHERE client_name IS NOT NULL AND client_name != '' ORDER BY client_name"
+    ).fetchall()
+    all_clients = [row['client_name'] for row in all_clients_raw]
+
+    # Get all employees and freelancers for the person dropdown
+    all_persons_raw = execute_query(conn,
+        "SELECT DISTINCT name, employment_type FROM users WHERE role = 'employee' ORDER BY name"
+    ).fetchall()
+    # Also get admin-submitted employee_name values (freelancer/other names added via admin form)
+    extra_names_raw = execute_query(conn,
+        "SELECT DISTINCT employee_name FROM submissions WHERE employee_name IS NOT NULL AND employee_name != '' ORDER BY employee_name"
+    ).fetchall()
+    extra_names = [r['employee_name'] for r in extra_names_raw]
+
+    all_persons = [{'name': r['name'], 'employment_type': r['employment_type']} for r in all_persons_raw]
+    # Add extra names that are not already in all_persons
+    existing_names = {p['name'] for p in all_persons}
+    for en in extra_names:
+        if en not in existing_names:
+            all_persons.append({'name': en, 'employment_type': 'freelancer'})
+
+    # Build query for analysis
+    query = '''
+        SELECT 
+            COALESCE(s.employee_name, u.name) as person_name,
+            u.employment_type,
+            s.client_name,
+            s.work_type,
+            SUM(CAST(s.quantity AS INTEGER)) as total_qty,
+            COUNT(*) as entries
+        FROM submissions s
+        JOIN users u ON s.user_id = u.id
+        WHERE 1=1
+    '''
+    params = []
+
+    if filter_client:
+        query += ' AND LOWER(s.client_name) = LOWER(?)'
+        params.append(filter_client)
+
+    if filter_person:
+        query += ' AND (LOWER(u.name) = LOWER(?) OR LOWER(s.employee_name) = LOWER(?))'
+        params.append(filter_person)
+        params.append(filter_person)
+
+    if filter_start:
+        query += ' AND s.date >= ?'
+        params.append(filter_start)
+
+    if filter_end:
+        query += ' AND s.date <= ?'
+        params.append(filter_end)
+
+    query += ' GROUP BY person_name, s.client_name, s.work_type ORDER BY person_name, s.client_name, s.work_type'
+
+    raw_rows = [dict(r) for r in execute_query(conn, query, params).fetchall()]
+    conn.close()
+
+    # Collect all unique work types from results
+    all_work_types = sorted(set(r['work_type'] for r in raw_rows if r['work_type']))
+
+
+    # Build pivot: keyed by (person_name, client_name) -> {work_type: total_qty, ...}
+    from collections import defaultdict
+    pivot = defaultdict(lambda: defaultdict(int))
+    person_client_meta = {}
+
+    for row in raw_rows:
+        key = (row['person_name'], row['client_name'])
+        pivot[key][row['work_type']] = row['total_qty']
+        if key not in person_client_meta:
+            person_client_meta[key] = {
+                'person_name': row['person_name'],
+                'employment_type': row['employment_type'],
+                'client_name': row['client_name'],
+            }
+
+    # Sort keys: by person_name then client_name
+    sorted_keys = sorted(pivot.keys(), key=lambda k: (k[0].lower(), k[1].lower() if k[1] else ''))
+
+    # Build table rows
+    table_rows = []
+    for key in sorted_keys:
+        meta = person_client_meta[key]
+        work_counts = pivot[key]
+        total = sum(work_counts.values())
+        table_rows.append({
+            'person_name': meta['person_name'],
+            'employment_type': meta['employment_type'],
+            'client_name': meta['client_name'],
+            'work_counts': work_counts,
+            'total': total,
+        })
+
+    return render_template(
+        'work_analysis.html',
+        all_clients=all_clients,
+        all_persons=all_persons,
+        filter_client=filter_client,
+        filter_person=filter_person,
+        filter_start=filter_start,
+        filter_end=filter_end,
+        all_work_types=all_work_types,
+        table_rows=table_rows,
+    )
+
+
 if __name__ == '__main__':
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     

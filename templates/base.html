@@ -69,6 +69,19 @@
                     </div>
                 </div>
                 <div class="nav-links">
+                    {% if session.role == 'admin' %}
+                    <!-- <a href="{{ url_for('work_analysis') }}"
+                        class="btn btn-ghost {% if request.endpoint == 'work_analysis' %}nav-active{% endif %}">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <rect x="3" y="3" width="7" height="7" rx="1" />
+                            <rect x="14" y="3" width="7" height="7" rx="1" />
+                            <rect x="3" y="14" width="7" height="7" rx="1" />
+                            <rect x="14" y="14" width="7" height="7" rx="1" />
+                        </svg>
+                        Work Analysis 
+                    </a> -->
+                    {% endif %}
                     <a href="{{ url_for('profile') }}" class="btn btn-ghost">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2">

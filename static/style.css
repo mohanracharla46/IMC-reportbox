@@ -457,6 +457,12 @@ body {
     gap: var(--spacing-sm);
 }
 
+.nav-active {
+    background: var(--primary-100) !important;
+    color: var(--primary-700) !important;
+    border-color: var(--primary-300) !important;
+}
+
 .nav-toggle {
     display: none;
     flex-direction: column;
