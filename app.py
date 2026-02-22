@@ -1342,7 +1342,7 @@ def work_analysis():
         query += ' AND s.date <= ?'
         params.append(filter_end)
 
-    query += ' GROUP BY person_name, s.client_name, s.work_type ORDER BY person_name, s.client_name, s.work_type'
+    query += ' GROUP BY COALESCE(s.employee_name, u.name), u.employment_type, s.client_name, s.work_type ORDER BY person_name, s.client_name, s.work_type'
 
     raw_rows = [dict(r) for r in execute_query(conn, query, params).fetchall()]
     conn.close()
