@@ -445,16 +445,21 @@
                 for (let item of parsed) {
                     if (!item || !item.work_date) continue; // Skip bad row items entirely
                     let cleanDate = String(item.work_date).split(' ')[0];
+
+                    // Standardize slashes to dashes if they exist (e.g. 2026/02/10 -> 2026-02-10)
+                    cleanDate = cleanDate.replace(/\//g, '-');
+
                     const p = cleanDate.split('-');
                     if (p.length === 3) {
                         cleanDate = `${p[0]}-${p[1].padStart(2, '0')}-${p[2].padStart(2, '0')}`;
-                        // Always convert valid parsed values
-                        rawStreak.push({
-                            ...item,
-                            work_date: cleanDate,
-                            daily_qty: Number(item.daily_qty) || 0
-                        });
                     }
+
+                    // Always add the item so we don't drop data points even if the date format is unusual
+                    rawStreak.push({
+                        ...item,
+                        work_date: cleanDate,
+                        daily_qty: Number(item.daily_qty) || 0
+                    });
                 }
             }
         } catch (e) {
