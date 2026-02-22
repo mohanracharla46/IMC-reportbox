@@ -3,6 +3,7 @@
 {% block title %}Work Analysis - Work Report System{% endblock %}
 
 {% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
     /* === Page Header === */
     .wa-header {
@@ -381,6 +382,11 @@
             type(s)</span>
     </div>
 
+    <!-- Chart Container -->
+    <div class="wa-filter-card" style="margin-bottom: 1.5rem; padding: 1.5rem;">
+        <canvas id="workChart" style="max-height: 400px;"></canvas>
+    </div>
+
     <div class="wa-table-wrap">
         <table class="wa-table">
             <thead>
@@ -473,5 +479,99 @@
             input.value = '';
         }
     }
+
+    // Chart.js Graph Initialization
+    document.addEventListener('DOMContentLoaded', function () {
+        const ctx = document.getElementById('workChart');
+        if (!ctx) return;
+
+        // Extract passed data from JSON blocks
+        let rawData = [];
+        let workTypes = [];
+        try {
+            const chartDataEl = document.getElementById('chart-data');
+            const workTypesEl = document.getElementById('work-types');
+            if (chartDataEl) rawData = JSON.parse(chartDataEl.textContent);
+            if (workTypesEl) workTypes = JSON.parse(workTypesEl.textContent);
+        } catch (e) {
+            console.error('Error parsing chart data', e);
+            return;
+        }
+
+        if (!rawData.length || !workTypes.length) return;
+
+        // Prepare Labels (Person Name + Client Name)
+        const labels = rawData.map(row => {
+            const client = row.client_name ? ` (${row.client_name})` : '';
+            return `${row.person_name}${client}`;
+        });
+
+        // Vibrant color palette for datasets
+        const colorPalette = [
+            { bg: 'rgba(1, 181, 178, 0.7)', border: 'rgba(1, 181, 178, 1)' }, // Primary cyan
+            { bg: 'rgba(239, 68, 68, 0.7)', border: 'rgba(239, 68, 68, 1)' },  // Red
+            { bg: 'rgba(59, 130, 246, 0.7)', border: 'rgba(59, 130, 246, 1)' }, // Blue
+            { bg: 'rgba(245, 158, 11, 0.7)', border: 'rgba(245, 158, 11, 1)' }, // Amber
+            { bg: 'rgba(139, 92, 246, 0.7)', border: 'rgba(139, 92, 246, 1)' }, // Purple
+            { bg: 'rgba(16, 185, 129, 0.7)', border: 'rgba(16, 185, 129, 1)' }, // Green
+            { bg: 'rgba(236, 72, 153, 0.7)', border: 'rgba(236, 72, 153, 1)' }, // Pink
+            { bg: 'rgba(14, 165, 233, 0.7)', border: 'rgba(14, 165, 233, 1)' }  // Light blue
+        ];
+
+        // Prepare Datasets
+        const datasets = workTypes.map((wt, index) => {
+            const data = rawData.map(row => row.work_counts[wt] || 0);
+            const color = colorPalette[index % colorPalette.length];
+            return {
+                label: wt,
+                data: data,
+                backgroundColor: color.bg,
+                borderColor: color.border,
+                borderWidth: 1
+            };
+        });
+
+        // Instantiate Chart
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Total Output by Person & Client',
+                        font: { size: 16 }
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                    }
+                },
+                scales: {
+                    x: {
+                        stacked: true,
+                    },
+                    y: {
+                        stacked: true,
+                        beginAtZero: true,
+                        ticks: {
+                            precision: 0 // to ensure whole numbers for quantities
+                        }
+                    }
+                }
+            }
+        });
+    });
+</script>
+<script id="chart-data" type="application/json">
+    {{ table_rows | default([]) | tojson | safe }}
+</script>
+<script id="work-types" type="application/json">
+    {{ all_work_types | default([]) | tojson | safe }}
 </script>
 {% endblock %}
