@@ -493,8 +493,27 @@
                     <div class="form-group">
                         <label for="admin_employee_name" class="form-label">Employee Name <span
                                 style="color: var(--error);">*</span></label>
-                        <input type="text" id="admin_employee_name" name="employee_name" class="form-input"
-                            placeholder="Enter your name/role..." value="{{ session['user_name'] }}" required>
+                        <select id="admin_employee_name" name="employee_name" class="form-input" required
+                            onchange="toggleOtherEmployeeName(this.value)">
+                            <option value="" disabled>Select employee or freelancer...</option>
+                            {% if employees %}
+                            <optgroup label="-> Inhouse">
+                                {% for emp in employees %}
+                                <option value="{{ emp['name'] }}" {% if emp['name']==session['user_name'] %}selected{%
+                                    endif %}>{{ emp['name'] }}</option>
+                                {% endfor %}
+                            </optgroup>
+                            {% endif %}
+                            {% if freelancers %}
+                            <optgroup label="-> Freelancers">
+                                {% for fl in freelancers %}
+
+                                <option value="{{ fl['name'] }}">{{ fl['name'] }}</option>
+                                {% endfor %}
+                            </optgroup>
+                            {% endif %}
+                            <option value="Other">Other</option>
+                        </select>
                     </div>
 
                     <div class="form-group">
@@ -503,6 +522,14 @@
                         <input type="date" id="admin_submission_date" name="submission_date" class="form-input"
                             value="{{ now.strftime('%Y-%m-%d') }}" max="{{ now.strftime('%Y-%m-%d') }}" required>
                     </div>
+                </div>
+
+                <!-- Other Employee Name (shown when 'Other' is selected) -->
+                <div id="admin_other_employee_group" class="form-group" style="display: none; margin-bottom: 1.5rem;">
+                    <label for="admin_other_employee_name" class="form-label">Enter Name Manually <span
+                            style="color: var(--error);">*</span></label>
+                    <input type="text" id="admin_other_employee_name" name="other_employee_name" class="form-input"
+                        placeholder="Type the employee/freelancer name...">
                 </div>
 
                 <!-- Client Category & Name -->
@@ -672,5 +699,22 @@
         </form>
     </div>
 </div>
+
+
+<script>
+    function toggleOtherEmployeeName(value) {
+        const group = document.getElementById('admin_other_employee_group');
+        const input = document.getElementById('admin_other_employee_name');
+        if (value === 'Other') {
+            group.style.display = 'block';
+            input.required = true;
+            input.focus();
+        } else {
+            group.style.display = 'none';
+            input.required = false;
+            input.value = '';
+        }
+    }
+</script>
 
 {% endblock %}

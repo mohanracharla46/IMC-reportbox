@@ -563,6 +563,10 @@ def admin_dashboard():
 def admin_submit_report():
     """Handle work report submission by admin for their own work (Self Work)"""
     employee_name = request.form.get('employee_name', '').strip()
+    other_employee_name = request.form.get('other_employee_name', '').strip()
+    # If "Other" was selected, use the manually typed name
+    if employee_name == 'Other' and other_employee_name:
+        employee_name = other_employee_name
     work_text = request.form.get('work_text', '').strip()
     client_category = request.form.get('client_category', '').strip()
     client_name = request.form.get('client_name', '').strip()
