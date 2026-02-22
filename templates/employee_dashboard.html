@@ -3,6 +3,7 @@
 {% block title %}Employee Dashboard - Work Report System{% endblock %}
 
 {% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <div class="dashboard-container">
     <div class="dashboard-header">
         <div class="header-content">
@@ -167,243 +168,258 @@
         </div>
     </div>
 
-    <!-- Streak Chart Section -->
-    <div class="card" style="margin-bottom: var(--spacing-xl);">
-        <div class="card-header">
-            <h2 class="card-title">My Daily Work Streak</h2>
-            <p class="card-subtitle">Your productivity calendar</p>
-        </div>
-        <div style="padding: 1.5rem;">
-            <style>
-                .streak-calendar {
-                    max-width: 350px;
-                    margin: 0 auto;
-                }
+    <!-- Productivity Analytics Section -->
+    <div style="display: flex; flex-wrap: wrap; gap: 1.5rem; margin-bottom: var(--spacing-xl);">
 
-                .calendar-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 1.2rem;
-                    font-weight: 700;
-                    color: var(--gray-800);
-                }
+        <!-- Calendar Card -->
+        <div class="card" style="margin-bottom: 0; flex: 1; min-width: 320px;">
+            <div class="card-header">
+                <h2 class="card-title">My Daily Work Streak</h2>
+                <p class="card-subtitle">Your productivity calendar</p>
+            </div>
+            <div style="padding: 1.5rem;">
+                <style>
+                    .streak-calendar {
+                        max-width: 350px;
+                        margin: 0 auto;
+                    }
 
-                .calendar-btn {
-                    background: none;
-                    border: none;
-                    cursor: pointer;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    width: 30px;
-                    height: 30px;
-                    border-radius: 50%;
-                    color: var(--gray-600);
-                    transition: all 0.2s;
-                }
+                    .calendar-header {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        margin-bottom: 1.2rem;
+                        font-weight: 700;
+                        color: var(--gray-800);
+                    }
 
-                .calendar-btn:hover {
-                    background: var(--gray-100);
-                    color: var(--gray-900);
-                }
+                    .calendar-btn {
+                        background: none;
+                        border: none;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        width: 30px;
+                        height: 30px;
+                        border-radius: 50%;
+                        color: var(--gray-600);
+                        transition: all 0.2s;
+                    }
 
-                .calendar-grid {
-                    display: grid;
-                    grid-template-columns: repeat(7, 1fr);
-                    gap: 0.5rem 0.2rem;
-                    text-align: center;
-                }
+                    .calendar-btn:hover {
+                        background: var(--gray-100);
+                        color: var(--gray-900);
+                    }
 
-                .calendar-day-name {
-                    font-size: 0.75rem;
-                    font-weight: 600;
-                    color: var(--gray-500);
-                    margin-bottom: 0.5rem;
-                }
+                    .calendar-grid {
+                        display: grid;
+                        grid-template-columns: repeat(7, 1fr);
+                        gap: 0.5rem 0.2rem;
+                        text-align: center;
+                    }
 
-                .calendar-cell {
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                }
+                    .calendar-day-name {
+                        font-size: 0.75rem;
+                        font-weight: 600;
+                        color: var(--gray-500);
+                        margin-bottom: 0.5rem;
+                    }
 
-                .calendar-day {
-                    width: 34px;
-                    height: 34px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    border-radius: 50%;
-                    background: var(--gray-100);
-                    color: var(--gray-700);
-                    font-size: 0.85rem;
-                    font-weight: 500;
-                    transition: transform 0.2s;
-                }
+                    .calendar-cell {
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                    }
 
-                .calendar-day.active-streak {
-                    background: #01b5b2;
-                    color: #fff;
-                    font-weight: 600;
-                    box-shadow: 0 3px 6px rgba(1, 181, 178, 0.3);
-                }
+                    .calendar-day {
+                        width: 34px;
+                        height: 34px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        border-radius: 50%;
+                        background: var(--gray-100);
+                        color: var(--gray-700);
+                        font-size: 0.85rem;
+                        font-weight: 500;
+                        transition: transform 0.2s;
+                    }
 
-                .calendar-day.empty-cell {
-                    background: transparent;
-                }
-            </style>
+                    .calendar-day.active-streak {
+                        background: #01b5b2;
+                        color: #fff;
+                        font-weight: 600;
+                        box-shadow: 0 3px 6px rgba(1, 181, 178, 0.3);
+                    }
 
-            <div class="streak-calendar">
-                <div class="calendar-header">
-                    <button id="prev-month" class="calendar-btn">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <polyline points="15 18 9 12 15 6"></polyline>
-                        </svg>
-                    </button>
-                    <span id="calendar-month-year"></span>
-                    <button id="next-month" class="calendar-btn">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <polyline points="9 18 15 12 9 6"></polyline>
-                        </svg>
-                    </button>
-                </div>
-                <div class="calendar-grid" id="calendar-grid">
-                    <!-- Dates populating dynamically -->
+                    .calendar-day.empty-cell {
+                        background: transparent;
+                    }
+                </style>
+
+                <div class="streak-calendar">
+                    <div class="calendar-header">
+                        <button id="prev-month" class="calendar-btn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <polyline points="15 18 9 12 15 6"></polyline>
+                            </svg>
+                        </button>
+                        <span id="calendar-month-year"></span>
+                        <button id="next-month" class="calendar-btn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="calendar-grid" id="calendar-grid">
+                        <!-- Dates populating dynamically -->
+                    </div>
                 </div>
             </div>
-        </div>
-    </div>
-</div>
 
-<!-- Recent Submissions -->
-<div class="card">
-    <div class="card-header">
-        <div class="header-info">
-            <h2 class="card-title">Recent Submissions</h2>
-            <p class="card-subtitle">Your work reports history</p>
-        </div>
-
-        <div class="card-actions">
-            <form method="GET" action="{{ url_for('employee_dashboard') }}" class="filter-mini-form">
-                <div class="form-group" style="margin-bottom: 0;">
-                    <input type="date" name="date" class="form-input" value="{{ request.args.get('date', '') }}"
-                        style="padding: 6px 12px; height: auto;">
+            <!-- Line Graph Card -->
+            <div class="card" style="margin-bottom: 0; flex: 2; min-width: 320px;">
+                <div class="card-header">
+                    <h2 class="card-title">Output Over Time</h2>
+                    <p class="card-subtitle">Your daily work quantities</p>
                 </div>
-                <button type="submit" class="btn btn-sm btn-ghost">Filter</button>
-                {% if request.args.get('date') %}
-                <a href="{{ url_for('employee_dashboard') }}" class="btn btn-sm btn-ghost">Clear</a>
-                {% endif %}
-            </form>
+                <div style="padding: 1.5rem;">
+                    <canvas id="myStreakChart" style="max-height: 350px; width: 100%;"></canvas>
+                </div>
+            </div>
 
-            <a href="{{ url_for('download_monthly_report', employee_id=session['user_id'], month=now.strftime('%Y-%m')) }}"
-                class="btn btn-sm btn-primary">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-                Export Month
-            </a>
         </div>
     </div>
 
-    {% if recent_submissions %}
-    <div class="table-container">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Client</th>
-                    <th>Type</th>
-                    <th>Qty</th>
-                    {% if session.employment_type == 'freelancer' %}
-                    <th>Amount</th>
+    <!-- Recent Submissions -->
+    <div class="card">
+        <div class="card-header">
+            <div class="header-info">
+                <h2 class="card-title">Recent Submissions</h2>
+                <p class="card-subtitle">Your work reports history</p>
+            </div>
+
+            <div class="card-actions">
+                <form method="GET" action="{{ url_for('employee_dashboard') }}" class="filter-mini-form">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <input type="date" name="date" class="form-input" value="{{ request.args.get('date', '') }}"
+                            style="padding: 6px 12px; height: auto;">
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-ghost">Filter</button>
+                    {% if request.args.get('date') %}
+                    <a href="{{ url_for('employee_dashboard') }}" class="btn btn-sm btn-ghost">Clear</a>
                     {% endif %}
-                    <th>Work Description</th>
-                    <th>Attachment</th>
-                    <th>Submitted At</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for submission in recent_submissions %}
-                <tr>
-                    <td>
-                        <span class="date-badge">{{ submission['date'] }}</span>
-                    </td>
-                    <td>
-                        <span class="client-name">{{ submission['client_name'] or 'N/A' }}</span>
-                    </td>
-                    <td>
-                        <span class="work-type-badge">{{ submission['work_type'] or 'N/A' }}</span>
-                    </td>
-                    <td>
-                        <span class="quantity-badge">{{ submission['quantity'] or 1 }}</span>
-                    </td>
-                    {% if session.employment_type == 'freelancer' %}
-                    <td>
-                        <span class="quantity-badge"
-                            style="background: var(--success-bg); color: var(--success); font-weight: 600;">
-                            ₹{{ calculate_submission_amount(submission['work_type'], submission['quantity'],
-                            session.employment_type) }}
-                        </span>
-                    </td>
-                    {% endif %}
-                    <td>
-                        <div class="work-text">{{ submission['work_text'][:60] }}{% if
-                            submission['work_text']|length > 60 %}...{% endif %}</div>
-                    </td>
-                    <td>
-                        {% if submission['file_path'] %}
-                        <a href="{{ url_for('download_file', filename=submission['file_path']|filename) }}"
-                            class="file-link">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                <polyline points="7 10 12 15 17 10" />
-                                <line x1="12" y1="15" x2="12" y2="3" />
-                            </svg>
-                            Download
-                        </a>
-                        {% else %}
-                        <span class="text-muted">No file</span>
+                </form>
+
+                <a href="{{ url_for('download_monthly_report', employee_id=session['user_id'], month=now.strftime('%Y-%m')) }}"
+                    class="btn btn-sm btn-primary">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    Export Month
+                </a>
+            </div>
+        </div>
+
+        {% if recent_submissions %}
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Client</th>
+                        <th>Type</th>
+                        <th>Qty</th>
+                        {% if session.employment_type == 'freelancer' %}
+                        <th>Amount</th>
                         {% endif %}
-                    </td>
-                    <td>
-                        <span class="time-text">{{ submission['created_at']|format_dt }}</span>
-                    </td>
-                    <td>
-                        <div style="display: flex; gap: 5px;">
-                            <a href="{{ url_for('edit_report', report_id=submission['id']) }}" class="btn btn-ghost"
-                                style="padding: 4px 8px; font-size: 0.8rem;">Edit</a>
-                            <button type="button" class="btn btn-ghost"
-                                style="padding: 4px 8px; font-size: 0.8rem; color: var(--error); border-color: var(--error);"
-                                data-delete-url="{{ url_for('delete_report', report_id=submission['id']) }}"
-                                onclick="showDeleteConfirm(this.dataset.deleteUrl, 'Delete Report')">Del</button>
-                        </div>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                        <th>Work Description</th>
+                        <th>Attachment</th>
+                        <th>Submitted At</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for submission in recent_submissions %}
+                    <tr>
+                        <td>
+                            <span class="date-badge">{{ submission['date'] }}</span>
+                        </td>
+                        <td>
+                            <span class="client-name">{{ submission['client_name'] or 'N/A' }}</span>
+                        </td>
+                        <td>
+                            <span class="work-type-badge">{{ submission['work_type'] or 'N/A' }}</span>
+                        </td>
+                        <td>
+                            <span class="quantity-badge">{{ submission['quantity'] or 1 }}</span>
+                        </td>
+                        {% if session.employment_type == 'freelancer' %}
+                        <td>
+                            <span class="quantity-badge"
+                                style="background: var(--success-bg); color: var(--success); font-weight: 600;">
+                                ₹{{ calculate_submission_amount(submission['work_type'], submission['quantity'],
+                                session.employment_type) }}
+                            </span>
+                        </td>
+                        {% endif %}
+                        <td>
+                            <div class="work-text">{{ submission['work_text'][:60] }}{% if
+                                submission['work_text']|length > 60 %}...{% endif %}</div>
+                        </td>
+                        <td>
+                            {% if submission['file_path'] %}
+                            <a href="{{ url_for('download_file', filename=submission['file_path']|filename) }}"
+                                class="file-link">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="7 10 12 15 17 10" />
+                                    <line x1="12" y1="15" x2="12" y2="3" />
+                                </svg>
+                                Download
+                            </a>
+                            {% else %}
+                            <span class="text-muted">No file</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="time-text">{{ submission['created_at']|format_dt }}</span>
+                        </td>
+                        <td>
+                            <div style="display: flex; gap: 5px;">
+                                <a href="{{ url_for('edit_report', report_id=submission['id']) }}" class="btn btn-ghost"
+                                    style="padding: 4px 8px; font-size: 0.8rem;">Edit</a>
+                                <button type="button" class="btn btn-ghost"
+                                    style="padding: 4px 8px; font-size: 0.8rem; color: var(--error); border-color: var(--error);"
+                                    data-delete-url="{{ url_for('delete_report', report_id=submission['id']) }}"
+                                    onclick="showDeleteConfirm(this.dataset.deleteUrl, 'Delete Report')">Del</button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="16" y1="13" x2="8" y2="13" />
+                <line x1="16" y1="17" x2="8" y2="17" />
+                <polyline points="10 9 9 9 8 9" />
+            </svg>
+            <h3>No submissions yet</h3>
+            <p>Your submitted work reports will appear here</p>
+        </div>
+        {% endif %}
     </div>
-    {% else %}
-    <div class="empty-state">
-        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <polyline points="14 2 14 8 20 8" />
-            <line x1="16" y1="13" x2="8" y2="13" />
-            <line x1="16" y1="17" x2="8" y2="17" />
-            <polyline points="10 9 9 9 8 9" />
-        </svg>
-        <h3>No submissions yet</h3>
-        <p>Your submitted work reports will appear here</p>
-    </div>
-    {% endif %}
-</div>
 </div>
 
 <script id="my-streak-data" type="application/json">
@@ -502,6 +518,78 @@
             currentDate.setMonth(currentDate.getMonth() + 1);
             renderCalendar(currentDate);
         });
+
+        // -----------------------------------------
+        // Render Streak Chart (Line Graph)
+        // -----------------------------------------
+        const streakCtx = document.getElementById('myStreakChart');
+        if (streakCtx && rawStreak.length > 0) {
+
+            // Re-use activeDates / rawStreak data
+            const allDates = [...new Set(rawStreak.map(item => item.work_date))].sort();
+
+            // Map data points
+            const dataPoints = allDates.map(date => {
+                const dayData = rawStreak.find(item => item.work_date === date);
+                return dayData ? dayData.daily_qty : 0;
+            });
+
+            // Format dates nicely for labels
+            const dateLabels = allDates.map(dStr => {
+                const d = new Date(dStr);
+                return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            });
+
+            new Chart(streakCtx, {
+                type: 'line',
+                data: {
+                    labels: dateLabels,
+                    datasets: [{
+                        label: '{{ session.user_name }}',
+                        data: dataPoints,
+                        borderColor: 'rgba(1, 181, 178, 1)',
+                        backgroundColor: 'rgba(1, 181, 178, 0.1)',
+                        borderWidth: 2,
+                        pointBackgroundColor: 'rgba(1, 181, 178, 1)',
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        fill: true,
+                        tension: 0.3 // smooth curves
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                        },
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        }
+                    },
+                    interaction: {
+                        mode: 'nearest',
+                        axis: 'x',
+                        intersect: false
+                    }
+                }
+            });
+        }
     });
 </script>
 {% endblock %}
