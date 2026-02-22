@@ -443,21 +443,25 @@
                 const parsed = JSON.parse(streakDataEl.textContent);
                 rawStreak = [];
                 for (let item of parsed) {
-                    if (!item || !item.work_date) continue; // Skip bad row items entirely
-                    let cleanDate = String(item.work_date).split(' ')[0];
+                    if (!item || !item.work_date) continue;
 
-                    // Standardize slashes to dashes if they exist (e.g. 2026/02/10 -> 2026-02-10)
-                    cleanDate = cleanDate.replace(/\//g, '-');
+                    let s = String(item.work_date).split(' ')[0].replace(/\//g, '-');
+                    let p = s.split('-');
+                    let cleanYYYYMMDD = s;
 
-                    const p = cleanDate.split('-');
+                    // Normalize to YYYY-MM-DD regardless of whether it's YYYY-MM-DD or DD-MM-YYYY
                     if (p.length === 3) {
-                        cleanDate = `${p[0]}-${p[1].padStart(2, '0')}-${p[2].padStart(2, '0')}`;
+                        if (p[0].length === 4) {
+                            cleanYYYYMMDD = `${p[0]}-${p[1].padStart(2, '0')}-${p[2].padStart(2, '0')}`;
+                        } else if (p[2].length === 4) {
+                            cleanYYYYMMDD = `${p[2]}-${p[1].padStart(2, '0')}-${p[0].padStart(2, '0')}`;
+                        }
                     }
 
-                    // Always add the item so we don't drop data points even if the date format is unusual
+                    // Push standardized data
                     rawStreak.push({
                         ...item,
-                        work_date: cleanDate,
+                        work_date: cleanYYYYMMDD,
                         daily_qty: Number(item.daily_qty) || 0
                     });
                 }
@@ -544,17 +548,16 @@
             renderCalendar(currentDate);
         });
 
+        const shortMonthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         function getChartDateLabels(dates) {
             return dates.map(dStr => {
                 if (!dStr) return 'Unknown';
                 const parts = dStr.split('-');
-                if (parts.length === 3) {
-                    const year = parseInt(parts[0], 10);
-                    const month = parseInt(parts[1], 10) - 1;
-                    const day = parseInt(parts[2], 10);
-                    if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
-                        const d = new Date(year, month, day);
-                        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                if (parts.length === 3 && parts[0].length === 4) {
+                    const monthIdx = parseInt(parts[1], 10) - 1;
+                    const dayNum = parseInt(parts[2], 10);
+                    if (monthIdx >= 0 && monthIdx < 12 && !isNaN(dayNum)) {
+                        return `${shortMonthNames[monthIdx]} ${dayNum}`; // Exactly "Feb 20"
                     }
                 }
                 return dStr;
