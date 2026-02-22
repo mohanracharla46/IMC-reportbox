@@ -439,7 +439,18 @@
 
         try {
             const streakDataEl = document.getElementById('my-streak-data');
-            if (streakDataEl) rawStreak = JSON.parse(streakDataEl.textContent);
+            if (streakDataEl) {
+                rawStreak = JSON.parse(streakDataEl.textContent);
+                // Sanitize dates strictly to YYYY-MM-DD right away
+                rawStreak = rawStreak.map(item => {
+                    let cleanDate = item.work_date.split(' ')[0];
+                    const p = cleanDate.split('-');
+                    if (p.length === 3) {
+                        cleanDate = `${p[0]}-${p[1].padStart(2, '0')}-${p[2].padStart(2, '0')}`;
+                    }
+                    return { ...item, work_date: cleanDate };
+                });
+            }
         } catch (e) {
             console.error('Error parsing streak data', e);
         }
@@ -447,7 +458,9 @@
         // Convert streak raw data into a Set of date strings "YYYY-MM-DD"
         const activeDates = new Set();
         rawStreak.forEach(item => {
-            if (item.daily_qty > 0) activeDates.add(item.work_date);
+            if (item.daily_qty > 0) {
+                activeDates.add(item.work_date);
+            }
         });
 
         const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
