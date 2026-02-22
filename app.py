@@ -1346,6 +1346,31 @@ def work_analysis():
     query += ' GROUP BY COALESCE(s.employee_name, u.name), u.employment_type, s.client_name, s.work_type ORDER BY person_name, s.client_name, s.work_type'
 
     raw_rows = [dict(r) for r in execute_query(conn, query, params).fetchall()]
+
+    # Query for the Activity Streak chart (daily quantities per person)
+    streak_query = '''
+        SELECT 
+            COALESCE(s.employee_name, u.name) as person_name,
+            s.date as work_date,
+            SUM(CAST(s.quantity AS INTEGER)) as daily_qty
+        FROM submissions s
+        JOIN users u ON s.user_id = u.id
+        WHERE 1=1
+    '''
+    # We apply the same dynamic WHERE clauses and params as the first query.
+    # We can reconstruct it simply:
+    if filter_client:
+        streak_query += ' AND LOWER(s.client_name) = LOWER(?)'
+    if filter_person:
+        streak_query += ' AND (LOWER(u.name) = LOWER(?) OR LOWER(s.employee_name) = LOWER(?))'
+    if filter_start:
+        streak_query += ' AND s.date >= ?'
+    if filter_end:
+        streak_query += ' AND s.date <= ?'
+
+    streak_query += ' GROUP BY COALESCE(s.employee_name, u.name), s.date ORDER BY s.date ASC'
+    raw_streak = [dict(r) for r in execute_query(conn, streak_query, params).fetchall()]
+
     conn.close()
 
     # Collect all unique work types from results
@@ -1394,6 +1419,7 @@ def work_analysis():
         filter_end=filter_end,
         all_work_types=all_work_types,
         table_rows=table_rows,
+        raw_streak=raw_streak,
     )
 
 

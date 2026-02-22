@@ -383,8 +383,15 @@
     </div>
 
     <!-- Chart Container -->
-    <div class="wa-filter-card" style="margin-bottom: 1.5rem; padding: 1.5rem;">
-        <canvas id="workChart" style="max-height: 400px;"></canvas>
+    <div
+        style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
+        <div class="wa-filter-card" style="margin-bottom: 0; padding: 1.5rem;">
+            <canvas id="workChart" style="max-height: 400px;"></canvas>
+        </div>
+
+        <div class="wa-filter-card" style="margin-bottom: 0; padding: 1.5rem;">
+            <canvas id="streakChart" style="max-height: 400px;"></canvas>
+        </div>
     </div>
 
     <div class="wa-table-wrap">
@@ -488,11 +495,15 @@
         // Extract passed data from JSON blocks
         let rawData = [];
         let workTypes = [];
+        let rawStreak = [];
         try {
             const chartDataEl = document.getElementById('chart-data');
             const workTypesEl = document.getElementById('work-types');
+            const streakDataEl = document.getElementById('streak-data');
+
             if (chartDataEl) rawData = JSON.parse(chartDataEl.textContent);
             if (workTypesEl) workTypes = JSON.parse(workTypesEl.textContent);
+            if (streakDataEl) rawStreak = JSON.parse(streakDataEl.textContent);
         } catch (e) {
             console.error('Error parsing chart data', e);
             return;
@@ -566,6 +577,93 @@
                 }
             }
         });
+
+        // ---------------- STREAK CHART (Line Graph) ----------------
+        const streakCtx = document.getElementById('streakChart');
+        if (streakCtx && rawStreak.length > 0) {
+
+            // 1. Extract all unique dates and sort them for the X-axis
+            const allDates = [...new Set(rawStreak.map(item => item.work_date))].sort();
+
+            // 2. Group data by person
+            const personsData = {};
+            rawStreak.forEach(item => {
+                if (!personsData[item.person_name]) {
+                    personsData[item.person_name] = {};
+                }
+                personsData[item.person_name][item.work_date] = item.daily_qty;
+            });
+
+            // 3. Prepare datasets
+            const streakDatasets = Object.keys(personsData).map((person, index) => {
+                const color = colorPalette[index % colorPalette.length];
+
+                // Map over all available dates to build an array of points for this person
+                const dataPoints = allDates.map(date => {
+                    return personsData[person][date] || 0;
+                });
+
+                return {
+                    label: person,
+                    data: dataPoints,
+                    borderColor: color.border,
+                    backgroundColor: color.bg.replace('0.7', '0.1'), // very light fill
+                    borderWidth: 2,
+                    pointBackgroundColor: color.border,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    fill: true,
+                    tension: 0.3 // smooth curves
+                };
+            });
+
+            // Format dates nicely for labels
+            const dateLabels = allDates.map(dStr => {
+                const d = new Date(dStr);
+                return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            });
+
+            new Chart(streakCtx, {
+                type: 'line',
+                data: {
+                    labels: dateLabels,
+                    datasets: streakDatasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Daily Work Streak',
+                            font: { size: 16 }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        }
+                    },
+                    interaction: {
+                        mode: 'nearest',
+                        axis: 'x',
+                        intersect: false
+                    }
+                }
+            });
+        }
     });
 </script>
 <script id="chart-data" type="application/json">
@@ -573,5 +671,8 @@
 </script>
 <script id="work-types" type="application/json">
     {{ all_work_types | default([]) | tojson | safe }}
+</script>
+<script id="streak-data" type="application/json">
+    {{ raw_streak | default([]) | tojson | safe }}
 </script>
 {% endblock %}
