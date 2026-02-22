@@ -440,16 +440,17 @@
         try {
             const streakDataEl = document.getElementById('my-streak-data');
             if (streakDataEl) {
-                rawStreak = JSON.parse(streakDataEl.textContent);
-                // Sanitize dates strictly to YYYY-MM-DD right away
-                rawStreak = rawStreak.map(item => {
-                    let cleanDate = item.work_date.split(' ')[0];
+                const parsed = JSON.parse(streakDataEl.textContent);
+                rawStreak = [];
+                for (let item of parsed) {
+                    if (!item || !item.work_date) continue; // Skip bad row items entirely
+                    let cleanDate = String(item.work_date).split(' ')[0];
                     const p = cleanDate.split('-');
                     if (p.length === 3) {
                         cleanDate = `${p[0]}-${p[1].padStart(2, '0')}-${p[2].padStart(2, '0')}`;
+                        rawStreak.push({ ...item, work_date: cleanDate });
                     }
-                    return { ...item, work_date: cleanDate };
-                });
+                }
             }
         } catch (e) {
             console.error('Error parsing streak data', e);
@@ -550,16 +551,18 @@
 
             // Format dates nicely for labels
             const dateLabels = allDates.map(dStr => {
+                if (!dStr) return 'Unknown';
                 const parts = dStr.split('-');
                 if (parts.length === 3) {
                     const year = parseInt(parts[0], 10);
                     const month = parseInt(parts[1], 10) - 1;
                     const day = parseInt(parts[2], 10);
-                    const d = new Date(year, month, day);
-                    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+                        const d = new Date(year, month, day);
+                        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    }
                 }
-                const d = new Date(dStr);
-                return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                return dStr; // Fallback to raw string if it can't be parsed properly
             });
 
             new Chart(streakCtx, {
