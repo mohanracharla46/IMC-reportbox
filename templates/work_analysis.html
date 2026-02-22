@@ -385,12 +385,12 @@
     <!-- Chart Container -->
     <div
         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
-        <div class="wa-filter-card" style="margin-bottom: 0; padding: 1.5rem;">
-            <canvas id="workChart" style="max-height: 400px;"></canvas>
+        <div class="wa-filter-card" style="margin-bottom: 0; padding: 1.5rem; height: 500px;">
+            <canvas id="workChart"></canvas>
         </div>
 
-        <div class="wa-filter-card" style="margin-bottom: 0; padding: 1.5rem;">
-            <canvas id="streakChart" style="max-height: 400px;"></canvas>
+        <div class="wa-filter-card" style="margin-bottom: 0; padding: 1.5rem; height: 500px;">
+            <canvas id="streakChart"></canvas>
         </div>
     </div>
 
@@ -550,6 +550,7 @@
                 datasets: datasets
             },
             options: {
+                indexAxis: 'y', // Make it a horizontal bar chart for better label readability
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
@@ -566,12 +567,15 @@
                 scales: {
                     x: {
                         stacked: true,
-                    },
-                    y: {
-                        stacked: true,
                         beginAtZero: true,
                         ticks: {
                             precision: 0 // to ensure whole numbers for quantities
+                        }
+                    },
+                    y: {
+                        stacked: true,
+                        ticks: {
+                            autoSkip: false // ensure all labels are shown
                         }
                     }
                 }
