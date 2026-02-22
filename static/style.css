@@ -201,7 +201,7 @@ body {
     font-size: 16px;
     line-height: 1.6;
     color: var(--gray-800);
-    background: linear-gradient(135deg, var(--gray-50) 0%, #f0fdfd 100%);
+    background: var(--primary-50);
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
