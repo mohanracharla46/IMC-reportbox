@@ -302,13 +302,23 @@
 
                 <div class="wa-field">
                     <label for="wa_client">Client</label>
-                    <select id="wa_client" name="client">
+                    {% set is_other_client = filter_client and filter_client not in all_clients %}
+                    <select id="wa_client" name="client" onchange="toggleOtherClient(this.value)">
                         <option value="">All Clients</option>
                         {% for client in all_clients %}
                         <option value="{{ client }}" {% if filter_client==client %}selected{% endif %}>{{ client }}
                         </option>
                         {% endfor %}
+                        <option value="Other" {% if is_other_client %}selected{% endif %}>Other</option>
                     </select>
+                </div>
+
+                <div class="wa-field" id="wa_other_client_group"
+                    style="{% if not is_other_client %}display: none;{% endif %}">
+                    <label for="wa_other_client">Other Client Name</label>
+                    <input type="text" id="wa_other_client" name="other_client"
+                        value="{% if is_other_client %}{{ filter_client }}{% endif %}"
+                        placeholder="Type client name...">
                 </div>
 
                 <div class="wa-field">
@@ -448,4 +458,20 @@
         </a>
     </div>
 </div>
+
+<script>
+    function toggleOtherClient(value) {
+        const group = document.getElementById('wa_other_client_group');
+        const input = document.getElementById('wa_other_client');
+        if (value === 'Other') {
+            group.style.display = 'flex';
+            input.required = true;
+            input.focus();
+        } else {
+            group.style.display = 'none';
+            input.required = false;
+            input.value = '';
+        }
+    }
+</script>
 {% endblock %}

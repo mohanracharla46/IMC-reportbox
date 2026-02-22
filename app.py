@@ -1283,15 +1283,16 @@ def work_analysis():
 
     # Filter parameters
     filter_client = request.args.get('client', '').strip()
+    other_client = request.args.get('other_client', '').strip()
     filter_person = request.args.get('person', '').strip()
     filter_start = request.args.get('start_date', '').strip()
     filter_end = request.args.get('end_date', '').strip()
 
-    # Get all distinct client names for the dropdown
-    all_clients_raw = execute_query(conn,
-        "SELECT DISTINCT client_name FROM submissions WHERE client_name IS NOT NULL AND client_name != '' ORDER BY client_name"
-    ).fetchall()
-    all_clients = [row['client_name'] for row in all_clients_raw]
+    if filter_client == 'Other' and other_client:
+        filter_client = other_client
+
+    # Define standard clients list based on corporate/political categories
+    all_clients = ['IMC', 'Cornext', 'AIC', 'Yuvatha', 'Raksha', 'RMR', 'RSR', 'SG', 'JKR', 'Degala']
 
     # Get all employees and freelancers for the person dropdown
     all_persons_raw = execute_query(conn,
