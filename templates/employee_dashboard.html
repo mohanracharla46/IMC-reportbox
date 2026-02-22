@@ -537,6 +537,14 @@
 
             // Format dates nicely for labels
             const dateLabels = allDates.map(dStr => {
+                const parts = dStr.split('-');
+                if (parts.length === 3) {
+                    const year = parseInt(parts[0], 10);
+                    const month = parseInt(parts[1], 10) - 1;
+                    const day = parseInt(parts[2], 10);
+                    const d = new Date(year, month, day);
+                    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                }
                 const d = new Date(dStr);
                 return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
             });
