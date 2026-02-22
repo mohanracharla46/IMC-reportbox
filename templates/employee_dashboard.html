@@ -448,7 +448,12 @@
                     const p = cleanDate.split('-');
                     if (p.length === 3) {
                         cleanDate = `${p[0]}-${p[1].padStart(2, '0')}-${p[2].padStart(2, '0')}`;
-                        rawStreak.push({ ...item, work_date: cleanDate });
+                        // Always convert valid parsed values
+                        rawStreak.push({
+                            ...item,
+                            work_date: cleanDate,
+                            daily_qty: Number(item.daily_qty) || 0
+                        });
                     }
                 }
             }
@@ -534,23 +539,8 @@
             renderCalendar(currentDate);
         });
 
-        // -----------------------------------------
-        // Render Streak Chart (Line Graph)
-        // -----------------------------------------
-        const streakCtx = document.getElementById('myStreakChart');
-        if (streakCtx && rawStreak.length > 0) {
-
-            // Re-use activeDates / rawStreak data
-            const allDates = [...new Set(rawStreak.map(item => item.work_date))].sort();
-
-            // Map data points
-            const dataPoints = allDates.map(date => {
-                const dayData = rawStreak.find(item => item.work_date === date);
-                return dayData ? dayData.daily_qty : 0;
-            });
-
-            // Format dates nicely for labels
-            const dateLabels = allDates.map(dStr => {
+        function getChartDateLabels(dates) {
+            return dates.map(dStr => {
                 if (!dStr) return 'Unknown';
                 const parts = dStr.split('-');
                 if (parts.length === 3) {
@@ -562,15 +552,33 @@
                         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                     }
                 }
-                return dStr; // Fallback to raw string if it can't be parsed properly
+                return dStr;
             });
+        }
+
+        // -----------------------------------------
+        // Render Streak Chart (Line Graph)
+        // -----------------------------------------
+        const streakCtx = document.getElementById('myStreakChart');
+        if (streakCtx && rawStreak.length > 0) {
+
+            // Extract distinct sorted dates that actually exist in the data
+            const allDates = [...new Set(rawStreak.map(item => item.work_date))].sort();
+
+            // Map corresponding data points exactly
+            const dataPoints = allDates.map(date => {
+                const dayData = rawStreak.find(item => item.work_date === date);
+                return dayData ? dayData.daily_qty : 0;
+            });
+
+            const dateLabels = getChartDateLabels(allDates);
 
             new Chart(streakCtx, {
                 type: 'line',
                 data: {
                     labels: dateLabels,
                     datasets: [{
-                        label: '{{ session.user_name }}',
+                        label: 'Total Output',
                         data: dataPoints,
                         borderColor: 'rgba(1, 181, 178, 1)',
                         backgroundColor: 'rgba(1, 181, 178, 0.1)',
