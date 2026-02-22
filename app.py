@@ -110,6 +110,20 @@ app.jinja_env.filters['format_dt'] = format_datetime_filter
 app.jinja_env.filters['filename'] = get_filename_filter
 
 # Database helper
+def format_streak_dates(raw_data):
+    """Ensure all dates returned for streaks are safely formatted as YYYY-MM-DD strings to prevent JSON serialization issues."""
+    formatted = []
+    for r in raw_data:
+        d = dict(r)
+        date_val = d.get('work_date')
+        if hasattr(date_val, 'strftime'):
+            d['work_date'] = date_val.strftime('%Y-%m-%d')
+        elif isinstance(date_val, str):
+            # Fallback string parsing just in case DB returned something unusual natively
+            d['work_date'] = str(date_val).split(' ')[0].replace('/', '-')
+        formatted.append(d)
+    return formatted
+
 def get_db_info():
     """Get database connection info and placeholder type"""
     db_url = os.environ.get('DATABASE_URL')
@@ -344,13 +358,15 @@ def employee_dashboard():
         ).fetchall()]
     
     # Get streak data for the user
-    raw_streak = [dict(r) for r in execute_query(conn,
+    raw_streak_results = execute_query(conn,
         '''SELECT date as work_date, SUM(CAST(quantity AS INTEGER)) as daily_qty
            FROM submissions
            WHERE user_id = ?
            GROUP BY date ORDER BY date ASC''',
         (session['user_id'],)
-    ).fetchall()]
+    ).fetchall()
+    
+    raw_streak = format_streak_dates(raw_streak_results)
     
     conn.close()
     
@@ -1379,7 +1395,8 @@ def work_analysis():
         streak_query += ' AND s.date <= ?'
 
     streak_query += ' GROUP BY COALESCE(s.employee_name, u.name), s.date ORDER BY s.date ASC'
-    raw_streak = [dict(r) for r in execute_query(conn, streak_query, params).fetchall()]
+    raw_streak_results = execute_query(conn, streak_query, params).fetchall()
+    raw_streak = format_streak_dates(raw_streak_results)
 
     conn.close()
 
