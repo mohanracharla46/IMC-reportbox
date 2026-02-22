@@ -343,6 +343,15 @@ def employee_dashboard():
             (session['user_id'],)
         ).fetchall()]
     
+    # Get streak data for the user
+    raw_streak = [dict(r) for r in execute_query(conn,
+        '''SELECT date as work_date, SUM(CAST(quantity AS INTEGER)) as daily_qty
+           FROM submissions
+           WHERE user_id = ?
+           GROUP BY date ORDER BY date ASC''',
+        (session['user_id'],)
+    ).fetchall()]
+    
     conn.close()
     
     return render_template(
@@ -351,6 +360,7 @@ def employee_dashboard():
         submission_count_today=submission_count_today,
         submissions_today=submissions_today,
         recent_submissions=recent_submissions,
+        raw_streak=raw_streak,
         now=datetime.now()
     )
 

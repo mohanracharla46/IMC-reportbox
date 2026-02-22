@@ -3,6 +3,7 @@
 {% block title %}Employee Dashboard - Work Report System{% endblock %}
 
 {% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <div class="dashboard-container">
     <div class="dashboard-header">
         <div class="header-content">
@@ -166,6 +167,17 @@
             </form>
         </div>
     </div>
+
+    <!-- Streak Chart Section -->
+    <div class="card" style="margin-bottom: var(--spacing-xl);">
+        <div class="card-header">
+            <h2 class="card-title">My Daily Work Streak</h2>
+            <p class="card-subtitle">Your productivity over time</p>
+        </div>
+        <div style="padding: 1.5rem;">
+            <canvas id="myStreakChart" style="max-height: 350px; width: 100%;"></canvas>
+        </div>
+    </div>
 </div>
 
 <!-- Recent Submissions -->
@@ -295,4 +307,92 @@
     {% endif %}
 </div>
 </div>
+
+<script id="my-streak-data" type="application/json">
+    {{ raw_streak | default([]) | tojson | safe }}
+</script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Render Streak Chart
+        const streakCtx = document.getElementById('myStreakChart');
+        if (!streakCtx) return;
+
+        let rawStreak = [];
+        try {
+            const streakDataEl = document.getElementById('my-streak-data');
+            if (streakDataEl) rawStreak = JSON.parse(streakDataEl.textContent);
+        } catch (e) {
+            console.error('Error parsing streak data', e);
+            return;
+        }
+
+        if (rawStreak.length > 0) {
+            // Extract all unique dates and sort them for the X-axis
+            const allDates = [...new Set(rawStreak.map(item => item.work_date))].sort();
+
+            // Map data points
+            const dataPoints = allDates.map(date => {
+                const dayData = rawStreak.find(item => item.work_date === date);
+                return dayData ? dayData.daily_qty : 0;
+            });
+
+            // Format dates nicely for labels
+            const dateLabels = allDates.map(dStr => {
+                const d = new Date(dStr);
+                return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            });
+
+            new Chart(streakCtx, {
+                type: 'line',
+                data: {
+                    labels: dateLabels,
+                    datasets: [{
+                        label: '{{ session.user_name }}',
+                        data: dataPoints,
+                        borderColor: 'rgba(1, 181, 178, 1)',
+                        backgroundColor: 'rgba(1, 181, 178, 0.1)',
+                        borderWidth: 2,
+                        pointBackgroundColor: 'rgba(1, 181, 178, 1)',
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        fill: true,
+                        tension: 0.3 // smooth curves
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                        },
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        }
+                    },
+                    interaction: {
+                        mode: 'nearest',
+                        axis: 'x',
+                        intersect: false
+                    }
+                }
+            });
+        }
+    });
+</script>
 {% endblock %}
