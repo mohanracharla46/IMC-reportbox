@@ -279,147 +279,148 @@
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- Line Graph Card -->
-            <div class="card" style="margin-bottom: 0; flex: 2; min-width: 320px;">
-                <div class="card-header">
-                    <h2 class="card-title">Output Over Time</h2>
-                    <p class="card-subtitle">Your daily work quantities</p>
-                </div>
-                <div style="padding: 1.5rem;">
-                    <canvas id="myStreakChart" style="max-height: 350px; width: 100%;"></canvas>
-                </div>
+        <!-- Line Graph Card -->
+        <div class="card" style="margin-bottom: 0; flex: 2; min-width: 320px;">
+            <div class="card-header">
+                <h2 class="card-title">Output Over Time</h2>
+                <p class="card-subtitle">Your daily work quantities</p>
             </div>
-
+            <div style="padding: 1.5rem;">
+                <canvas id="myStreakChart" style="max-height: 350px; width: 100%;"></canvas>
+            </div>
         </div>
     </div>
 
-    <!-- Recent Submissions -->
-    <div class="card">
-        <div class="card-header">
-            <div class="header-info">
-                <h2 class="card-title">Recent Submissions</h2>
-                <p class="card-subtitle">Your work reports history</p>
-            </div>
+</div>
 
-            <div class="card-actions">
-                <form method="GET" action="{{ url_for('employee_dashboard') }}" class="filter-mini-form">
-                    <div class="form-group" style="margin-bottom: 0;">
-                        <input type="date" name="date" class="form-input" value="{{ request.args.get('date', '') }}"
-                            style="padding: 6px 12px; height: auto;">
-                    </div>
-                    <button type="submit" class="btn btn-sm btn-ghost">Filter</button>
-                    {% if request.args.get('date') %}
-                    <a href="{{ url_for('employee_dashboard') }}" class="btn btn-sm btn-ghost">Clear</a>
+<!-- Recent Submissions -->
+<div class="card">
+    <div class="card-header">
+        <div class="header-info">
+            <h2 class="card-title">Recent Submissions</h2>
+            <p class="card-subtitle">Your work reports history</p>
+        </div>
+
+        <div class="card-actions">
+            <form method="GET" action="{{ url_for('employee_dashboard') }}" class="filter-mini-form">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <input type="date" name="date" class="form-input" value="{{ request.args.get('date', '') }}"
+                        style="padding: 6px 12px; height: auto;">
+                </div>
+                <button type="submit" class="btn btn-sm btn-ghost">Filter</button>
+                {% if request.args.get('date') %}
+                <a href="{{ url_for('employee_dashboard') }}" class="btn btn-sm btn-ghost">Clear</a>
+                {% endif %}
+            </form>
+
+            <a href="{{ url_for('download_monthly_report', employee_id=session['user_id'], month=now.strftime('%Y-%m')) }}"
+                class="btn btn-sm btn-primary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Export Month
+            </a>
+        </div>
+    </div>
+
+    {% if recent_submissions %}
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Client</th>
+                    <th>Type</th>
+                    <th>Qty</th>
+                    {% if session.employment_type == 'freelancer' %}
+                    <th>Amount</th>
                     {% endif %}
-                </form>
-
-                <a href="{{ url_for('download_monthly_report', employee_id=session['user_id'], month=now.strftime('%Y-%m')) }}"
-                    class="btn btn-sm btn-primary">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                        <polyline points="7 10 12 15 17 10" />
-                        <line x1="12" y1="15" x2="12" y2="3" />
-                    </svg>
-                    Export Month
-                </a>
-            </div>
-        </div>
-
-        {% if recent_submissions %}
-        <div class="table-container">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Client</th>
-                        <th>Type</th>
-                        <th>Qty</th>
-                        {% if session.employment_type == 'freelancer' %}
-                        <th>Amount</th>
+                    <th>Work Description</th>
+                    <th>Attachment</th>
+                    <th>Submitted At</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for submission in recent_submissions %}
+                <tr>
+                    <td>
+                        <span class="date-badge">{{ submission['date'] }}</span>
+                    </td>
+                    <td>
+                        <span class="client-name">{{ submission['client_name'] or 'N/A' }}</span>
+                    </td>
+                    <td>
+                        <span class="work-type-badge">{{ submission['work_type'] or 'N/A' }}</span>
+                    </td>
+                    <td>
+                        <span class="quantity-badge">{{ submission['quantity'] or 1 }}</span>
+                    </td>
+                    {% if session.employment_type == 'freelancer' %}
+                    <td>
+                        <span class="quantity-badge"
+                            style="background: var(--success-bg); color: var(--success); font-weight: 600;">
+                            ₹{{ calculate_submission_amount(submission['work_type'], submission['quantity'],
+                            session.employment_type) }}
+                        </span>
+                    </td>
+                    {% endif %}
+                    <td>
+                        <div class="work-text">{{ submission['work_text'][:60] }}{% if
+                            submission['work_text']|length > 60 %}...{% endif %}</div>
+                    </td>
+                    <td>
+                        {% if submission['file_path'] %}
+                        <a href="{{ url_for('download_file', filename=submission['file_path']|filename) }}"
+                            class="file-link">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="7 10 12 15 17 10" />
+                                <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                            Download
+                        </a>
+                        {% else %}
+                        <span class="text-muted">No file</span>
                         {% endif %}
-                        <th>Work Description</th>
-                        <th>Attachment</th>
-                        <th>Submitted At</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for submission in recent_submissions %}
-                    <tr>
-                        <td>
-                            <span class="date-badge">{{ submission['date'] }}</span>
-                        </td>
-                        <td>
-                            <span class="client-name">{{ submission['client_name'] or 'N/A' }}</span>
-                        </td>
-                        <td>
-                            <span class="work-type-badge">{{ submission['work_type'] or 'N/A' }}</span>
-                        </td>
-                        <td>
-                            <span class="quantity-badge">{{ submission['quantity'] or 1 }}</span>
-                        </td>
-                        {% if session.employment_type == 'freelancer' %}
-                        <td>
-                            <span class="quantity-badge"
-                                style="background: var(--success-bg); color: var(--success); font-weight: 600;">
-                                ₹{{ calculate_submission_amount(submission['work_type'], submission['quantity'],
-                                session.employment_type) }}
-                            </span>
-                        </td>
-                        {% endif %}
-                        <td>
-                            <div class="work-text">{{ submission['work_text'][:60] }}{% if
-                                submission['work_text']|length > 60 %}...{% endif %}</div>
-                        </td>
-                        <td>
-                            {% if submission['file_path'] %}
-                            <a href="{{ url_for('download_file', filename=submission['file_path']|filename) }}"
-                                class="file-link">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                    <polyline points="7 10 12 15 17 10" />
-                                    <line x1="12" y1="15" x2="12" y2="3" />
-                                </svg>
-                                Download
-                            </a>
-                            {% else %}
-                            <span class="text-muted">No file</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <span class="time-text">{{ submission['created_at']|format_dt }}</span>
-                        </td>
-                        <td>
-                            <div style="display: flex; gap: 5px;">
-                                <a href="{{ url_for('edit_report', report_id=submission['id']) }}" class="btn btn-ghost"
-                                    style="padding: 4px 8px; font-size: 0.8rem;">Edit</a>
-                                <button type="button" class="btn btn-ghost"
-                                    style="padding: 4px 8px; font-size: 0.8rem; color: var(--error); border-color: var(--error);"
-                                    data-delete-url="{{ url_for('delete_report', report_id=submission['id']) }}"
-                                    onclick="showDeleteConfirm(this.dataset.deleteUrl, 'Delete Report')">Del</button>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <div class="empty-state">
-            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="16" y1="13" x2="8" y2="13" />
-                <line x1="16" y1="17" x2="8" y2="17" />
-                <polyline points="10 9 9 9 8 9" />
-            </svg>
-            <h3>No submissions yet</h3>
-            <p>Your submitted work reports will appear here</p>
-        </div>
-        {% endif %}
+                    </td>
+                    <td>
+                        <span class="time-text">{{ submission['created_at']|format_dt }}</span>
+                    </td>
+                    <td>
+                        <div style="display: flex; gap: 5px;">
+                            <a href="{{ url_for('edit_report', report_id=submission['id']) }}" class="btn btn-ghost"
+                                style="padding: 4px 8px; font-size: 0.8rem;">Edit</a>
+                            <button type="button" class="btn btn-ghost"
+                                style="padding: 4px 8px; font-size: 0.8rem; color: var(--error); border-color: var(--error);"
+                                data-delete-url="{{ url_for('delete_report', report_id=submission['id']) }}"
+                                onclick="showDeleteConfirm(this.dataset.deleteUrl, 'Delete Report')">Del</button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
+    {% else %}
+    <div class="empty-state">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+            <polyline points="10 9 9 9 8 9" />
+        </svg>
+        <h3>No submissions yet</h3>
+        <p>Your submitted work reports will appear here</p>
+    </div>
+    {% endif %}
+</div>
 </div>
 
 <script id="my-streak-data" type="application/json">
