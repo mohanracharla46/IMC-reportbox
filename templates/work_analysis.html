@@ -521,22 +521,19 @@
             return `${row.person_name}${client}`;
         });
 
-        // Lighter, more vibrant color palette for better visibility
-        const colorPalette = [
-            { bg: 'rgba(56, 189, 248, 0.7)', border: 'rgba(56, 189, 248, 1)' }, // Light Blue
-            { bg: 'rgba(52, 211, 153, 0.7)', border: 'rgba(52, 211, 153, 1)' }, // Mint
-            { bg: 'rgba(251, 146, 60, 0.7)', border: 'rgba(251, 146, 60, 1)' }, // Orange
-            { bg: 'rgba(129, 140, 248, 0.7)', border: 'rgba(129, 140, 248, 1)' }, // Indigo
-            { bg: 'rgba(244, 114, 182, 0.7)', border: 'rgba(244, 114, 182, 1)' }, // Pink
-            { bg: 'rgba(250, 204, 21, 0.7)', border: 'rgba(250, 204, 21, 1)' }, // Yellow
-            { bg: 'rgba(167, 139, 250, 0.7)', border: 'rgba(167, 139, 250, 1)' }, // Violet
-            { bg: 'rgba(45, 212, 191, 0.7)', border: 'rgba(45, 212, 191, 1)' }  // Teal
-        ];
+        // Generate unique colors based on index to avoid duplicates
+        const getColor = (index) => {
+            const hue = (index * 137.5) % 360; // Golden angle distribution for unique hues
+            return {
+                bg: `hsla(${hue}, 75%, 75%, 0.7)`,
+                border: `hsla(${hue}, 75%, 65%, 1)`
+            };
+        };
 
         // Prepare Datasets
         const datasets = workTypes.map((wt, index) => {
             const data = rawData.map(row => row.work_counts[wt] || 0);
-            const color = colorPalette[index % colorPalette.length];
+            const color = getColor(index);
             return {
                 label: wt,
                 data: data,
@@ -627,8 +624,8 @@
 
             const labelsArr = Object.keys(clientTotals);
             const dataValues = Object.values(clientTotals);
-            const pieColors = labelsArr.map((_, index) => colorPalette[index % colorPalette.length].bg);
-            const pieBorders = labelsArr.map((_, index) => colorPalette[index % colorPalette.length].border);
+            const pieColors = labelsArr.map((_, index) => getColor(index).bg);
+            const pieBorders = labelsArr.map((_, index) => getColor(index).border);
 
             new Chart(clientCtx, {
                 type: 'doughnut',

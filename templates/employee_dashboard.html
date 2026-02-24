@@ -585,20 +585,17 @@
                 const labels = clientData.map(item => item.client_name || 'Others');
                 const values = clientData.map(item => item.total_qty);
 
-                // Lighter, more vibrant color palette
-                const colorPalette = [
-                    { bg: 'rgba(56, 189, 248, 0.7)', border: 'rgba(56, 189, 248, 1)' }, // Light Blue
-                    { bg: 'rgba(52, 211, 153, 0.7)', border: 'rgba(52, 211, 153, 1)' }, // Mint
-                    { bg: 'rgba(251, 146, 60, 0.7)', border: 'rgba(251, 146, 60, 1)' }, // Orange
-                    { bg: 'rgba(129, 140, 248, 0.7)', border: 'rgba(129, 140, 248, 1)' }, // Indigo
-                    { bg: 'rgba(244, 114, 182, 0.7)', border: 'rgba(244, 114, 182, 1)' }, // Pink
-                    { bg: 'rgba(250, 204, 21, 0.7)', border: 'rgba(250, 204, 21, 1)' }, // Yellow
-                    { bg: 'rgba(167, 139, 250, 0.7)', border: 'rgba(167, 139, 250, 1)' }, // Violet
-                    { bg: 'rgba(45, 212, 191, 0.7)', border: 'rgba(45, 212, 191, 1)' }  // Teal
-                ];
+                // Generate unique colors based on index to avoid duplicates
+                const getColor = (index) => {
+                    const hue = (index * 137.5) % 360; // Golden angle distribution for unique hues
+                    return {
+                        bg: `hsla(${hue}, 75%, 75%, 0.7)`,
+                        border: `hsla(${hue}, 75%, 65%, 1)`
+                    };
+                };
 
-                const pieColors = labels.map((_, index) => colorPalette[index % colorPalette.length].bg);
-                const pieBorders = labels.map((_, index) => colorPalette[index % colorPalette.length].border);
+                const pieColors = labels.map((_, index) => getColor(index).bg);
+                const pieBorders = labels.map((_, index) => getColor(index).border);
 
                 new Chart(clientCtx, {
                     type: 'doughnut',
