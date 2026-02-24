@@ -390,7 +390,7 @@
         </div>
 
         <div class="wa-filter-card" style="margin-bottom: 0; padding: 1.5rem; height: 500px;">
-            <canvas id="streakChart"></canvas>
+            <canvas id="typeDistributionChart"></canvas>
         </div>
     </div>
 
@@ -495,15 +495,12 @@
         // Extract passed data from JSON blocks
         let rawData = [];
         let workTypes = [];
-        let rawStreak = [];
         try {
             const chartDataEl = document.getElementById('chart-data');
             const workTypesEl = document.getElementById('work-types');
-            const streakDataEl = document.getElementById('streak-data');
 
             if (chartDataEl) rawData = JSON.parse(chartDataEl.textContent);
             if (workTypesEl) workTypes = JSON.parse(workTypesEl.textContent);
-            if (streakDataEl) rawStreak = JSON.parse(streakDataEl.textContent);
         } catch (e) {
             console.error('Error parsing chart data', e);
             return;
@@ -511,22 +508,29 @@
 
         if (!rawData.length || !workTypes.length) return;
 
+        // Dynamic height adjustment for bar chart based on number of labels
+        const personCount = rawData.length;
+        const chartContainer = ctx.parentElement;
+        if (personCount > 8) {
+            chartContainer.style.height = (personCount * 50) + 'px';
+        }
+
         // Prepare Labels (Person Name + Client Name)
         const labels = rawData.map(row => {
             const client = row.client_name ? ` (${row.client_name})` : '';
             return `${row.person_name}${client}`;
         });
 
-        // Vibrant color palette for datasets
+        // Lighter, more vibrant color palette for better visibility
         const colorPalette = [
-            { bg: 'rgba(1, 181, 178, 0.7)', border: 'rgba(1, 181, 178, 1)' }, // Primary cyan
-            { bg: 'rgba(239, 68, 68, 0.7)', border: 'rgba(239, 68, 68, 1)' },  // Red
-            { bg: 'rgba(59, 130, 246, 0.7)', border: 'rgba(59, 130, 246, 1)' }, // Blue
-            { bg: 'rgba(245, 158, 11, 0.7)', border: 'rgba(245, 158, 11, 1)' }, // Amber
-            { bg: 'rgba(139, 92, 246, 0.7)', border: 'rgba(139, 92, 246, 1)' }, // Purple
-            { bg: 'rgba(16, 185, 129, 0.7)', border: 'rgba(16, 185, 129, 1)' }, // Green
-            { bg: 'rgba(236, 72, 153, 0.7)', border: 'rgba(236, 72, 153, 1)' }, // Pink
-            { bg: 'rgba(14, 165, 233, 0.7)', border: 'rgba(14, 165, 233, 1)' }  // Light blue
+            { bg: 'rgba(56, 189, 248, 0.7)', border: 'rgba(56, 189, 248, 1)' }, // Light Blue
+            { bg: 'rgba(52, 211, 153, 0.7)', border: 'rgba(52, 211, 153, 1)' }, // Mint
+            { bg: 'rgba(251, 146, 60, 0.7)', border: 'rgba(251, 146, 60, 1)' }, // Orange
+            { bg: 'rgba(129, 140, 248, 0.7)', border: 'rgba(129, 140, 248, 1)' }, // Indigo
+            { bg: 'rgba(244, 114, 182, 0.7)', border: 'rgba(244, 114, 182, 1)' }, // Pink
+            { bg: 'rgba(250, 204, 21, 0.7)', border: 'rgba(250, 204, 21, 1)' }, // Yellow
+            { bg: 'rgba(167, 139, 250, 0.7)', border: 'rgba(167, 139, 250, 1)' }, // Violet
+            { bg: 'rgba(45, 212, 191, 0.7)', border: 'rgba(45, 212, 191, 1)' }  // Teal
         ];
 
         // Prepare Datasets
@@ -538,11 +542,14 @@
                 data: data,
                 backgroundColor: color.bg,
                 borderColor: color.border,
-                borderWidth: 1
+                borderWidth: 1,
+                borderRadius: 4,
+                barPercentage: 0.8,
+                categoryPercentage: 0.9
             };
         });
 
-        // Instantiate Chart
+        // Instantiate Horizontal Bar Chart
         new Chart(ctx, {
             type: 'bar',
             data: {
@@ -550,120 +557,129 @@
                 datasets: datasets
             },
             options: {
-                indexAxis: 'y', // Make it a horizontal bar chart for better label readability
+                indexAxis: 'y',
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
                     title: {
                         display: true,
                         text: 'Total Output by Person & Client',
-                        font: { size: 16 }
+                        font: { size: 18, weight: 'bold', family: "'Outfit', sans-serif" },
+                        padding: { bottom: 20 },
+                        color: '#1f2937'
+                    },
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            usePointStyle: true,
+                            padding: 20,
+                            font: { size: 12, family: "'Outfit', sans-serif" }
+                        }
                     },
                     tooltip: {
+                        backgroundColor: 'rgba(17, 24, 39, 0.9)',
+                        padding: 12,
+                        titleFont: { size: 14, weight: 'bold' },
+                        bodyFont: { size: 13 },
+                        cornerRadius: 8,
                         mode: 'index',
-                        intersect: false,
+                        intersect: false
                     }
                 },
                 scales: {
                     x: {
                         stacked: true,
                         beginAtZero: true,
+                        grid: { color: '#f3f4f6' },
                         ticks: {
-                            precision: 0 // to ensure whole numbers for quantities
+                            precision: 0,
+                            font: { family: "'Outfit', sans-serif" },
+                            color: '#9ca3af'
                         }
                     },
                     y: {
                         stacked: true,
+                        grid: { display: false },
                         ticks: {
-                            autoSkip: false // ensure all labels are shown
+                            autoSkip: false,
+                            font: { weight: '600', family: "'Outfit', sans-serif", size: 12 },
+                            color: '#374151',
+                            padding: 10
                         }
                     }
+                },
+                animation: {
+                    duration: 1500,
+                    easing: 'easeOutQuart'
                 }
             }
         });
 
-        // ---------------- STREAK CHART (Line Graph) ----------------
-        const streakCtx = document.getElementById('streakChart');
-        if (streakCtx && rawStreak.length > 0) {
+        // ---------------- CLIENT DISTRIBUTION CHART (Donut Chart) ----------------
+        const clientCtx = document.getElementById('typeDistributionChart');
+        if (clientCtx && rawData.length > 0) {
+            const clientTotals = {};
 
-            // 1. Extract all unique dates and sort them for the X-axis
-            const allDates = [...new Set(rawStreak.map(item => item.work_date))].sort();
-
-            // 2. Group data by person
-            const personsData = {};
-            rawStreak.forEach(item => {
-                if (!personsData[item.person_name]) {
-                    personsData[item.person_name] = {};
-                }
-                personsData[item.person_name][item.work_date] = item.daily_qty;
+            rawData.forEach(row => {
+                const client = row.client_name || 'Others';
+                clientTotals[client] = (clientTotals[client] || 0) + row.total;
             });
 
-            // 3. Prepare datasets
-            const streakDatasets = Object.keys(personsData).map((person, index) => {
-                const color = colorPalette[index % colorPalette.length];
+            const labelsArr = Object.keys(clientTotals);
+            const dataValues = Object.values(clientTotals);
+            const pieColors = labelsArr.map((_, index) => colorPalette[index % colorPalette.length].bg);
+            const pieBorders = labelsArr.map((_, index) => colorPalette[index % colorPalette.length].border);
 
-                // Map over all available dates to build an array of points for this person
-                const dataPoints = allDates.map(date => {
-                    return personsData[person][date] || 0;
-                });
-
-                return {
-                    label: person,
-                    data: dataPoints,
-                    borderColor: color.border,
-                    backgroundColor: color.bg.replace('0.7', '0.1'), // very light fill
-                    borderWidth: 2,
-                    pointBackgroundColor: color.border,
-                    pointRadius: 4,
-                    pointHoverRadius: 6,
-                    fill: true,
-                    tension: 0.3 // smooth curves
-                };
-            });
-
-            // Format dates nicely for labels
-            const dateLabels = allDates.map(dStr => {
-                const d = new Date(dStr);
-                return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            });
-
-            new Chart(streakCtx, {
-                type: 'line',
+            new Chart(clientCtx, {
+                type: 'doughnut',
                 data: {
-                    labels: dateLabels,
-                    datasets: streakDatasets
+                    labels: labelsArr,
+                    datasets: [{
+                        data: dataValues,
+                        backgroundColor: pieColors,
+                        borderColor: pieBorders,
+                        borderWidth: 2,
+                        hoverOffset: 15
+                    }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    cutout: '65%',
                     plugins: {
                         title: {
                             display: true,
-                            text: 'Daily Work Streak',
-                            font: { size: 16 }
+                            text: 'Work Distribution by Client',
+                            font: { size: 18, weight: 'bold', family: "'Outfit', sans-serif" },
+                            padding: { bottom: 20 },
+                            color: '#1f2937'
+                        },
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 25,
+                                font: { size: 12, weight: '500', family: "'Outfit', sans-serif" }
+                            }
                         },
                         tooltip: {
-                            mode: 'index',
-                            intersect: false,
-                        }
-                    },
-                    scales: {
-                        x: {
-                            grid: {
-                                display: false
-                            }
-                        },
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                precision: 0
+                            backgroundColor: 'rgba(17, 24, 39, 0.9)',
+                            padding: 12,
+                            cornerRadius: 8,
+                            callbacks: {
+                                label: function (context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed || 0;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return ` ${label}: ${value} units (${percentage}%)`;
+                                }
                             }
                         }
                     },
-                    interaction: {
-                        mode: 'nearest',
-                        axis: 'x',
-                        intersect: false
+                    animation: {
+                        duration: 1500,
+                        easing: 'easeOutQuart'
                     }
                 }
             });

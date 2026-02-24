@@ -13,3 +13,4 @@ uploads/
 *.log
 .vscode/
 .idea/
+app.db

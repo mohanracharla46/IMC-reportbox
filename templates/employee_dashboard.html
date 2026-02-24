@@ -281,14 +281,14 @@
             </div>
         </div>
 
-        <!-- Line Graph Card -->
+        <!-- Client Distribution Chart -->
         <div class="card" style="margin-bottom: 0; flex: 2; min-width: 320px;">
             <div class="card-header">
-                <h2 class="card-title">Output Over Time</h2>
-                <p class="card-subtitle">Your daily work quantities</p>
+                <h2 class="card-title">Work Distribution by Client</h2>
+                <p class="card-subtitle">Contribution across different clients</p>
             </div>
-            <div style="padding: 1.5rem;">
-                <canvas id="myStreakChart" style="max-height: 350px; width: 100%;"></canvas>
+            <div style="padding: 1.5rem; height: 350px;">
+                <canvas id="clientDistributionChart"></canvas>
             </div>
         </div>
     </div>
@@ -425,6 +425,9 @@
 
 <script id="my-streak-data" type="application/json">
     {{ raw_streak | default([]) | tojson | safe }}
+</script>
+<script id="client-distribution-data" type="application/json">
+    {{ client_distribution | default([]) | tojson | safe }}
 </script>
 
 <script>
@@ -565,71 +568,85 @@
         }
 
         // -----------------------------------------
-        // Render Streak Chart (Line Graph)
+        // Render Client Distribution Chart (Donut)
         // -----------------------------------------
-        const streakCtx = document.getElementById('myStreakChart');
-        if (streakCtx && rawStreak.length > 0) {
+        const clientCtx = document.getElementById('clientDistributionChart');
+        const clientDataEl = document.getElementById('client-distribution-data');
 
-            // Extract distinct sorted dates that actually exist in the data
-            const allDates = [...new Set(rawStreak.map(item => item.work_date))].sort();
+        if (clientCtx && clientDataEl) {
+            let clientData = [];
+            try {
+                clientData = JSON.parse(clientDataEl.textContent);
+            } catch (e) {
+                console.error('Error parsing client distribution data', e);
+            }
 
-            // Map corresponding data points exactly
-            const dataPoints = allDates.map(date => {
-                const dayData = rawStreak.find(item => item.work_date === date);
-                return dayData ? dayData.daily_qty : 0;
-            });
+            if (clientData.length > 0) {
+                const labels = clientData.map(item => item.client_name || 'Others');
+                const values = clientData.map(item => item.total_qty);
 
-            const dateLabels = getChartDateLabels(allDates);
+                // Lighter, more vibrant color palette
+                const colorPalette = [
+                    { bg: 'rgba(56, 189, 248, 0.7)', border: 'rgba(56, 189, 248, 1)' }, // Light Blue
+                    { bg: 'rgba(52, 211, 153, 0.7)', border: 'rgba(52, 211, 153, 1)' }, // Mint
+                    { bg: 'rgba(251, 146, 60, 0.7)', border: 'rgba(251, 146, 60, 1)' }, // Orange
+                    { bg: 'rgba(129, 140, 248, 0.7)', border: 'rgba(129, 140, 248, 1)' }, // Indigo
+                    { bg: 'rgba(244, 114, 182, 0.7)', border: 'rgba(244, 114, 182, 1)' }, // Pink
+                    { bg: 'rgba(250, 204, 21, 0.7)', border: 'rgba(250, 204, 21, 1)' }, // Yellow
+                    { bg: 'rgba(167, 139, 250, 0.7)', border: 'rgba(167, 139, 250, 1)' }, // Violet
+                    { bg: 'rgba(45, 212, 191, 0.7)', border: 'rgba(45, 212, 191, 1)' }  // Teal
+                ];
 
-            new Chart(streakCtx, {
-                type: 'line',
-                data: {
-                    labels: dateLabels,
-                    datasets: [{
-                        label: 'Total Output',
-                        data: dataPoints,
-                        borderColor: 'rgba(1, 181, 178, 1)',
-                        backgroundColor: 'rgba(1, 181, 178, 0.1)',
-                        borderWidth: 2,
-                        pointBackgroundColor: 'rgba(1, 181, 178, 1)',
-                        pointRadius: 4,
-                        pointHoverRadius: 6,
-                        fill: true,
-                        tension: 0.3 // smooth curves
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        tooltip: {
-                            mode: 'index',
-                            intersect: false,
-                        },
-                        legend: {
-                            display: false
-                        }
+                const pieColors = labels.map((_, index) => colorPalette[index % colorPalette.length].bg);
+                const pieBorders = labels.map((_, index) => colorPalette[index % colorPalette.length].border);
+
+                new Chart(clientCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: values,
+                            backgroundColor: pieColors,
+                            borderColor: pieBorders,
+                            borderWidth: 2,
+                            hoverOffset: 15
+                        }]
                     },
-                    scales: {
-                        x: {
-                            grid: {
-                                display: false
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '65%',
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                                labels: {
+                                    usePointStyle: true,
+                                    padding: 20,
+                                    font: { size: 12, weight: '500', family: "'Outfit', sans-serif" }
+                                }
+                            },
+                            tooltip: {
+                                backgroundColor: 'rgba(17, 24, 39, 0.9)',
+                                padding: 12,
+                                cornerRadius: 8,
+                                callbacks: {
+                                    label: function (context) {
+                                        const label = context.label || '';
+                                        const value = context.parsed || 0;
+                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                        const percentage = ((value / total) * 100).toFixed(1);
+                                        return ` ${label}: ${value} units (${percentage}%)`;
+                                    }
+                                }
                             }
                         },
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                precision: 0
-                            }
+                        animation: {
+                            duration: 1500,
+                            easing: 'easeOutQuart'
                         }
-                    },
-                    interaction: {
-                        mode: 'nearest',
-                        axis: 'x',
-                        intersect: false
                     }
-                }
-            });
+                });
+            }
         }
     });
 </script>

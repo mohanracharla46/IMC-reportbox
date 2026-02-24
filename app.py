@@ -368,6 +368,17 @@ def employee_dashboard():
     
     raw_streak = format_streak_dates(raw_streak_results)
     
+    # Get client distribution for the user
+    client_distribution_results = execute_query(conn,
+        '''SELECT client_name, SUM(CAST(quantity AS INTEGER)) as total_qty
+           FROM submissions
+           WHERE user_id = ?
+           GROUP BY client_name''',
+        (session['user_id'],)
+    ).fetchall()
+    
+    client_distribution = [dict(row) for row in client_distribution_results]
+    
     conn.close()
     
     return render_template(
@@ -377,6 +388,7 @@ def employee_dashboard():
         submissions_today=submissions_today,
         recent_submissions=recent_submissions,
         raw_streak=raw_streak,
+        client_distribution=client_distribution,
         now=datetime.now()
     )
 
