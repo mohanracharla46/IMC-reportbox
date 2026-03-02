@@ -1477,6 +1477,9 @@ if __name__ == '__main__':
     print("  Email: prashanth@iramediaconcepts.com")
     print("  Password: admin123")
     print("="*60 + "\n")
+
     
     # Run the Flask app
-    app.run(debug=True, host='0.0.0.0', port=8000,use_reloader=False)
+    port = int(os.getenv("PORT", 8000))
+    app.run(debug=True, host='0.0.0.0', port=port, use_reloader=False)
+    
