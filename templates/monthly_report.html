@@ -89,90 +89,126 @@
         </div>
     </div>
 
-    <!-- Submissions Grouped by Date -->
+    <!-- Submissions Table -->
     {% if submissions %}
-    <div class="card">
-        <div class="card-header">
-            <h2 class="card-title">Work Reports</h2>
-            <p class="card-subtitle">All submissions for {{ month }}</p>
-        </div>
+    <style>
+        .wa-table-wrap {
+            overflow-x: auto;
+            border-radius: var(--radius-xl);
+            border: 1px solid var(--gray-200);
+            box-shadow: 0 1px 6px rgba(0, 0, 0, 0.04);
+            background: #fff;
+            margin-top: 1.5rem;
+        }
 
-        <div class="monthly-report-content">
-            {% set current_date = namespace(value=None) %}
-            {% for submission in submissions %}
-            {% if submission['date'] != current_date.value %}
-            {% if current_date.value %}
-        </div> <!-- Close previous date-group -->
-    </div> <!-- Close previous date-card -->
-    {% endif %}
-    {% set current_date.value = submission['date'] %}
+        .wa-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+            min-width: 800px;
+            background: #f8f9fa;
+        }
 
-    <div class="date-card">
-        <div class="date-header">
-            <h3 class="date-title">{{ submission['date'] }}</h3>
-            <div style="display: flex; gap: 10px; align-items: center;">
-                <span class="date-count">{{ submissions|selectattr('date', 'equalto', submission['date'])|list|length }}
-                    report(s)</span>
-                {% if employee['employment_type'] == 'freelancer' %}
-                <span class="quantity-badge"
-                    style="background: var(--success-bg); color: var(--success); font-weight: 700;">
-                    Daily Total: ₹{{ daily_totals[submission['date']|string] }}
-                </span>
-                {% endif %}
-            </div>
-        </div>
-        <div class="date-group">
-            {% endif %}
+        .wa-table thead th {
+            background: #f1f3f5;
+            color: var(--gray-600);
+            font-weight: 600;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 0.8rem 1rem;
+            text-align: left;
+            border: 1px solid #000000;
+            white-space: nowrap;
+        }
 
-            <div class="submission-item">
-                <div class="submission-header">
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <span class="submission-badge"
-                            style="background: var(--primary-700); color: white; padding: 2px 8px; border-radius: 4px; font-weight: 600;">#{{
-                            submission['submission_number'] }}</span>
-                        <span class="client-name" style="font-weight: 700; color: var(--gray-900);">{{
-                            submission['client_name'] or 'N/A' }}</span>
-                        <span class="work-type-badge">{{ submission['work_type'] or 'N/A' }}</span>
-                        <span class="quantity-badge">{{ submission['quantity'] or 1 }}</span>
-                        {% if employee['employment_type'] == 'freelancer' %}
-                        <span class="quantity-badge"
-                            style="background: var(--success-bg); color: var(--success); font-weight: 600;">
-                            ₹{{ calculate_submission_amount(submission['work_type'], submission['quantity'],
-                            employee['employment_type']) }}
+        .wa-table tbody tr {
+            background: #ffffff;
+            border-bottom: 1px solid #000000;
+        }
+
+        .wa-table tbody tr:hover {
+            background: #f8fffe;
+        }
+
+        .wa-table tbody td {
+            padding: 0.8rem 1rem;
+            color: var(--gray-800);
+            vertical-align: middle;
+            border: 1px solid #000000;
+        }
+
+        .wa-date-cell {
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        
+        .wa-time-cell {
+            color: var(--gray-500);
+            font-size: 0.8rem;
+            white-space: nowrap;
+        }
+    </style>
+
+    <div class="wa-table-wrap">
+        <table class="wa-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Count</th>
+                    <th>Client</th>
+                    <th>Work Type</th>
+                    <th>Qty</th>
+                    {% if employee['employment_type'] == 'freelancer' %}
+                    <th>Amount</th>
+                    {% endif %}
+                    <th>Description</th>
+                    <th>Attachment</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for submission in submissions %}
+                <tr>
+                    <td>
+                        <div class="wa-date-cell">{{ submission['date'] }}</div>
+                        <div class="wa-time-cell">{{ submission['created_at']|format_dt(only_time=True) }}</div>
+                    </td>
+                    <td>
+                        <span style="background: var(--primary-700); color: white; padding: 2px 6px; border-radius: 4px; font-weight: 600; font-size: 0.75rem;">
+                            {{ submission['submission_number'] }}
                         </span>
+                    </td>
+                    <td><span class="client-name" style="font-weight: 600;">{{ submission['client_name'] or 'N/A' }}</span></td>
+                    <td><span class="work-type-badge">{{ submission['work_type'] or 'N/A' }}</span></td>
+                    <td style="text-align: center;"><span class="quantity-badge">{{ submission['quantity'] or 1 }}</span></td>
+                    {% if employee['employment_type'] == 'freelancer' %}
+                    <td style="text-align: center;">
+                        <span class="quantity-badge" style="background: var(--success-bg); color: var(--success); font-weight: 600;">
+                            ₹{{ calculate_submission_amount(submission['work_type'], submission['quantity'], employee['employment_type']) }}
+                        </span>
+                    </td>
+                    {% endif %}
+                    <td style="max-width: 300px;">{{ submission['work_text'] }}</td>
+                    <td>
+                        {% if submission['file_path'] %}
+                        <a href="{{ url_for('download_file', filename=submission['file_path']|filename) }}" class="file-link" style="font-size: 0.8rem;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="7 10 12 15 17 10" />
+                                <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                            Download
+                        </a>
+                        {% else %}
+                        <span style="color: var(--gray-400); font-size: 0.8rem;">-</span>
                         {% endif %}
-                    </div>
-                    <span class="submission-time">
-                        {{ submission['created_at']|format_dt(only_time=True) }}
-                    </span>
-                </div>
-                <div class="submission-content"
-                    style="margin-top: 8px; color: var(--gray-700); background: var(--gray-50); padding: 12px; border-radius: var(--radius-md);">
-                    {{ submission['work_text'] }}
-                </div>
-                {% if submission['file_path'] %}
-                <div class="submission-attachment">
-                    <a href="{{ url_for('download_file', filename=submission['file_path']|filename) }}"
-                        class="file-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <path
-                                d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-                        </svg>
-                        {{ submission['file_path']|filename }}
-                    </a>
-                </div>
-                {% endif %}
-            </div>
-            {% endfor %}
-
-            {% if current_date.value %}
-        </div> <!-- Close last date-group -->
-    </div> <!-- Close last date-card -->
-    {% endif %}
-</div>
-</div>
-{% else %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
 <div class="card">
     <div class="empty-state">
         <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
