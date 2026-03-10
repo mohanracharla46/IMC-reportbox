@@ -1461,6 +1461,104 @@ def work_analysis():
         raw_streak=raw_streak,
     )
 
+@app.route('/admin/client-statistics')
+@admin_required
+def client_statistics():
+    """Client Statistics - show how much work and money spent per client"""
+    conn = get_db_connection()
+
+    # Filter parameters
+    filter_client = request.args.get('client', '').strip()
+    other_client = request.args.get('other_client', '').strip()
+    filter_start = request.args.get('start_date', '').strip()
+    filter_end = request.args.get('end_date', '').strip()
+    filter_work_type = request.args.get('work_type', '').strip()
+
+    if filter_client == 'Other' and other_client:
+        filter_client = other_client
+
+    # Define standard clients list
+    all_clients = ['IMC', 'Cornext', 'AIC', 'Yuvatha', 'Raksha', 'RMR', 'RSR', 'SG', 'JKR', 'Degala']
+
+    # Collect all unique work types for the filter dropdown
+    all_work_types_raw = execute_query(conn, "SELECT DISTINCT work_type FROM submissions WHERE work_type IS NOT NULL").fetchall()
+    all_work_types = sorted(set(r['work_type'] for r in all_work_types_raw if r['work_type']))
+
+    # Build query
+    query = '''
+        SELECT 
+            s.client_name,
+            s.work_type,
+            u.employment_type,
+            SUM(CAST(s.quantity AS INTEGER)) as total_qty
+        FROM submissions s
+        JOIN users u ON s.user_id = u.id
+        WHERE 1=1
+    '''
+    params = []
+
+    if filter_client:
+        query += ' AND LOWER(s.client_name) = LOWER(?)'
+        params.append(filter_client)
+
+    if filter_start:
+        query += ' AND s.date >= ?'
+        params.append(filter_start)
+
+    if filter_end:
+        query += ' AND s.date <= ?'
+        params.append(filter_end)
+
+    if filter_work_type:
+        query += ' AND LOWER(s.work_type) = LOWER(?)'
+        params.append(filter_work_type)
+
+    query += ' GROUP BY s.client_name, s.work_type, u.employment_type ORDER BY s.client_name, s.work_type'
+
+    raw_rows = [dict(r) for r in execute_query(conn, query, params).fetchall()]
+    conn.close()
+
+    # Calculate amount and group by (Client, Work Type)
+    from collections import defaultdict
+    client_stats = defaultdict(lambda: {'total_qty': 0, 'total_amount': 0})
+    
+    for row in raw_rows:
+        client = row['client_name'] or 'Unknown'
+        wt = row['work_type'] or 'Unknown'
+        qty = row['total_qty'] or 0
+        emp_type = row['employment_type'] or 'inhouse'
+        
+        amt = calculate_submission_amount(wt, qty, emp_type)
+        
+        key = (client, wt)
+        client_stats[key]['total_qty'] += qty
+        client_stats[key]['total_amount'] += amt
+
+    # Convert to list for the template
+    table_rows = []
+    for (client, wt), stats in client_stats.items():
+        table_rows.append({
+            'client_name': client,
+            'work_type': wt,
+            'total_qty': stats['total_qty'],
+            'total_amount': stats['total_amount']
+        })
+        
+    # Sort the table rows
+    table_rows.sort(key=lambda x: (x['client_name'].lower(), x['work_type'].lower()))
+
+    return render_template(
+        'client_statistics.html',
+        all_clients=all_clients,
+        all_work_types=all_work_types,
+        filter_client=filter_client,
+        filter_start=filter_start,
+        filter_end=filter_end,
+        filter_work_type=filter_work_type,
+        table_rows=table_rows
+    )
+
+
 
 if __name__ == '__main__':
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
