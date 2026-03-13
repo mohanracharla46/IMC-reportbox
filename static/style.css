@@ -1473,15 +1473,14 @@ body {
     -webkit-backdrop-filter: blur(8px);
     z-index: 1500;
     padding: var(--spacing-xl);
-    overflow-y: auto;
-    transition: opacity 0.3s ease-in-out;
+    overflow: hidden;
 }
 
 .modal.active {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: center;
-    animation: modalOverlayFadeIn 0.3s ease-out;
+    animation: modalOverlayFadeIn 0.3s ease-out forwards;
 }
 
 @keyframes modalOverlayFadeIn {
@@ -1509,7 +1508,8 @@ body {
     position: relative;
     overflow: hidden;
     transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    margin: auto 0;
+    margin: auto;
+    animation-fill-mode: forwards;
 }
 
 .modal-content::before {

@@ -12,6 +12,7 @@
         href="https://fonts.googleapis.com/css2?family=Epilogue:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet">
     <link rel="shortcut icon" href="{{ url_for('static', filename='images/logo.png') }}" type="image/png">
+    {% block extra_head %}{% endblock %}
 </head>
 
 <body>
@@ -136,6 +137,7 @@
             </div>
         </div>
     </div>
+    {% block modals %}{% endblock %}
 
     <!-- Footer -->
     <footer class="footer">
@@ -145,6 +147,7 @@
     </footer>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
+    {% block extra_script %}{% endblock %}
 </body>
 
 </html>

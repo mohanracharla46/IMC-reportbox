@@ -90,7 +90,7 @@ function setupClientSelection(prefix = '') {
         'Corporate': ['IMC', 'Cornext', 'AIC', 'Yuvatha', 'Raksha', 'Other']
     };
 
-    const workTypeOptions = {
+    let workTypeOptions = {
         'Political': [
             'Shoot with Camera', 'Calendar Poster', 'Informative Poster', 'Elevation Poster',
             'Reel', 'Press Conference Shoot', 'Regular Video', 'Cinematic Videos',
@@ -101,6 +101,20 @@ function setupClientSelection(prefix = '') {
             'Brochure', 'Shoot on Mobile', 'Print Material', 'Other'
         ]
     };
+
+    // Fetch work types from API
+    fetch('/api/work-types')
+        .then(response => response.json())
+        .then(data => {
+            if (data && (data.Political || data.Corporate)) {
+                workTypeOptions = data;
+                // Update dropdowns if category is already selected
+                if (categorySelect.value) {
+                    updateWorkTypes(categorySelect.value);
+                }
+            }
+        })
+        .catch(err => console.error('Error fetching work types:', err));
 
     function updateClientNames() {
         const category = categorySelect.value;

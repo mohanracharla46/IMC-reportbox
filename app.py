@@ -39,30 +39,44 @@ def page_not_found(error):
 def internal_server_error(error):
     return "Internal Server Error", 500
 
+# Rates Cache
+_rates_cache = None
+
+def get_all_rates():
+    """Get all work type rates as a dictionary, using cache if available"""
+    global _rates_cache
+    if _rates_cache is None:
+        try:
+            conn = get_db_connection()
+            rows = execute_query(conn, 'SELECT name, rate FROM work_types').fetchall()
+            conn.close()
+            _rates_cache = {row['name']: row['rate'] for row in rows}
+        except Exception as e:
+            print(f"Error fetching rates: {e}")
+            return {}
+    return _rates_cache
+
+def clear_rates_cache():
+    """Clear the rates cache when changes are made"""
+    global _rates_cache
+    _rates_cache = None
+
 def calculate_submission_amount(work_type, quantity, employment_type):
     """Calculate amount based on work type for both inhouse and freelancers"""
     
-    # Pricing structure (applies to both inhouse and freelancers)
-    rates = {
-        'Shoot with Camera': 2000,
-        'Calendar Poster': 300,
-        'Informative Poster': 300,
-        'Elevation Poster': 300,
-        'Reel': 600,
-        'Press Conference Shoot': 400,
-        'Regular Video': 1500,
-        'Cinematic Videos': 2500,
-        'Brochures': 1000,
-        'Printing Material': 500,
-        'Shoot on Mobile': 2500,
-        'Poster': 300,
-        'Video': 1500,
-        'Brochure': 1000,
-        'Print Material': 500,
-        'Other': 0
-    }
+    rates_dict = get_all_rates()
+    rate = rates_dict.get(work_type)
     
-    rate = rates.get(work_type, 0)
+    if rate is None:
+        # Fallback to old hardcoded rates if work_type not found in DB
+        rates = {
+            'Shoot with Camera': 2000, 'Calendar Poster': 300, 'Informative Poster': 300,
+            'Elevation Poster': 300, 'Reel': 600, 'Press Conference Shoot': 400,
+            'Regular Video': 1500, 'Cinematic Videos': 2500, 'Brochures': 1000,
+            'Printing Material': 500, 'Shoot on Mobile': 2500, 'Poster': 300,
+            'Video': 1500, 'Brochure': 1000, 'Print Material': 500, 'Other': 0
+        }
+        rate = rates.get(work_type, 0)
     
     try:
         qty = int(quantity or 0)
@@ -182,6 +196,46 @@ def init_db():
         )
     ''')
     
+    # Create work_types table
+    cursor.execute(f'''
+        CREATE TABLE IF NOT EXISTS work_types (
+            id {id_type},
+            name TEXT NOT NULL,
+            category TEXT NOT NULL,
+            rate INTEGER DEFAULT 0,
+            UNIQUE(name, category)
+        )
+    ''')
+    
+    # Seed work_types if empty
+    cursor.execute('SELECT COUNT(*) FROM work_types')
+    if cursor.fetchone()[0] == 0:
+        default_work_types = [
+            ('Shoot with Camera', 'Political', 2000),
+            ('Calendar Poster', 'Political', 300),
+            ('Informative Poster', 'Political', 300),
+            ('Elevation Poster', 'Political', 300),
+            ('Reel', 'Political', 600),
+            ('Press Conference Shoot', 'Political', 400),
+            ('Regular Video', 'Political', 1500),
+            ('Cinematic Videos', 'Political', 2500),
+            ('Brochures', 'Political', 1000),
+            ('Printing Material', 'Political', 500),
+            ('Shoot on Mobile', 'Political', 2500),
+            ('Other', 'Political', 0),
+            ('Shoot with Camera', 'Corporate', 2000),
+            ('Video', 'Corporate', 1500),
+            ('Reel', 'Corporate', 600),
+            ('Poster', 'Corporate', 300),
+            ('Web Development', 'Corporate', 0),
+            ('Brochure', 'Corporate', 1000),
+            ('Shoot on Mobile', 'Corporate', 2500),
+            ('Print Material', 'Corporate', 500),
+            ('Other', 'Corporate', 0)
+        ]
+        for name, cat, rate in default_work_types:
+            cursor.execute(f'INSERT INTO work_types (name, category, rate) VALUES ({q}, {q}, {q})', (name, cat, rate))
+
     # Add columns to existing tables if they don't exist
     for column, table, definition in [
         ('employment_type', 'users', 'TEXT DEFAULT "inhouse"'),
@@ -212,6 +266,7 @@ def init_db():
     
     conn.commit()
     conn.close()
+
 
 # Initialize database on startup
 init_db()
@@ -727,9 +782,101 @@ def export_self_work():
     output.seek(0)
     response = make_response(output.getvalue())
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     response.headers["Content-Disposition"] = f"attachment; filename=Self_Work_Export_{timestamp}.xlsx"
     response.headers["Content-Type"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     return response
+
+@app.route('/admin/work-types')
+@admin_required
+def manage_work_types():
+    """Page to manage work types and their rates"""
+    conn = get_db_connection()
+    work_types = [dict(row) for row in execute_query(conn, 'SELECT * FROM work_types ORDER BY category, name').fetchall()]
+    conn.close()
+    return render_template('manage_work_types.html', work_types=work_types)
+
+@app.route('/admin/work-types/add', methods=['POST'])
+@admin_required
+def add_work_type():
+    """Add a new work type"""
+    name = request.form.get('name', '').strip()
+    category = request.form.get('category', '').strip()
+    rate = request.form.get('rate', 0)
+    
+    if not name or not category:
+        flash('Name and category are required.', 'error')
+        return redirect(url_for('manage_work_types'))
+    
+    conn = get_db_connection()
+    try:
+        execute_query(conn, 'INSERT INTO work_types (name, category, rate) VALUES (?, ?, ?)', (name, category, rate))
+        conn.commit()
+        clear_rates_cache()
+        flash(f'Work type "{name}" added successfully!', 'success')
+    except Exception as e:
+        flash(f'Error adding work type: {str(e)}', 'error')
+    finally:
+        conn.close()
+    return redirect(url_for('manage_work_types'))
+
+@app.route('/admin/work-types/edit/<int:type_id>', methods=['POST'])
+@admin_required
+def edit_work_type(type_id):
+    """Edit an existing work type"""
+    name = request.form.get('name', '').strip()
+    category = request.form.get('category', '').strip()
+    rate = request.form.get('rate', 0)
+    
+    if not name or not category:
+        flash('Name and category are required.', 'error')
+        return redirect(url_for('manage_work_types'))
+    
+    conn = get_db_connection()
+    try:
+        execute_query(conn, 'UPDATE work_types SET name = ?, category = ?, rate = ? WHERE id = ?', (name, category, rate, type_id))
+        conn.commit()
+        clear_rates_cache()
+        flash(f'Work type updated successfully!', 'success')
+    except Exception as e:
+        flash(f'Error updating work type: {str(e)}', 'error')
+    finally:
+        conn.close()
+    return redirect(url_for('manage_work_types'))
+
+@app.route('/admin/work-types/delete/<int:type_id>', methods=['POST'])
+@admin_required
+def delete_work_type(type_id):
+    """Delete a work type"""
+    conn = get_db_connection()
+    try:
+        execute_query(conn, 'DELETE FROM work_types WHERE id = ?', (type_id,))
+        conn.commit()
+        clear_rates_cache()
+        flash('Work type deleted successfully!', 'success')
+    except Exception as e:
+        flash(f'Error deleting work type: {str(e)}', 'error')
+    finally:
+        conn.close()
+    return redirect(url_for('manage_work_types'))
+
+@app.route('/api/work-types')
+def get_work_types_api():
+    """API endpoint to get work types by category"""
+    conn = get_db_connection()
+    rows = execute_query(conn, 'SELECT name, category FROM work_types').fetchall()
+    conn.close()
+    
+    result = {'Political': [], 'Corporate': []}
+    for row in rows:
+        cat = row['category']
+        if cat in result:
+            result[cat].append(row['name'])
+        else:
+            result[cat] = [row['name']]
+    
+    from flask import jsonify
+    return jsonify(result)
 
 @app.route('/admin/employee/add', methods=['POST'])
 @admin_required
@@ -1235,11 +1382,16 @@ def edit_report(report_id):
         client_name = request.form.get('client_name', '').strip()
         other_client_name = request.form.get('other_client_name', '').strip()
         work_type = request.form.get('work_type', '').strip()
+        other_work_type_name = request.form.get('other_work_type_name', '').strip()
         quantity = request.form.get('quantity', '1')
         
         # Handle 'Other' client name
         if client_name in ['Others', 'Other'] and other_client_name:
             client_name = other_client_name
+            
+        # Handle 'Other' work type
+        if work_type == 'Other' and other_work_type_name:
+            work_type = other_work_type_name
         
         if not work_text or not client_name or not work_type:
             flash('All fields marked with * are required.', 'error')
