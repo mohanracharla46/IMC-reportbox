@@ -5,6 +5,9 @@
 
 // ========== Initialize on DOM Load ==========
 document.addEventListener('DOMContentLoaded', function () {
+    // Flag for CSS
+    document.body.classList.add('js-enabled');
+    
     // Display current date
     displayCurrentDate();
 
@@ -502,9 +505,15 @@ function validateInput(input) {
 
 // ========== Scroll Reveal Logic ==========
 function initializeScrollReveal() {
+    // If IntersectionObserver is not supported, reveal everything and return
+    if (!window.IntersectionObserver) {
+        document.querySelectorAll('.reveal-on-scroll').forEach(el => el.classList.add('revealed'));
+        return;
+    }
+
     const observerOptions = {
-        threshold: 0.05, // Lower threshold for more reliable triggering
-        rootMargin: '0px 0px 50px 0px' // Positive margin to trigger BEFORE it enters
+        threshold: 0.05,
+        rootMargin: '0px 0px 50px 0px'
     };
 
     const observer = new IntersectionObserver((entries) => {
@@ -516,14 +525,10 @@ function initializeScrollReveal() {
         });
     }, observerOptions);
 
-    // Only apply to elements that are currently visible (not in hidden tabs)
-    document.querySelectorAll('.card, .stats-grid, .status-card, .data-table').forEach(el => {
-        // Fallback: If it's already in the viewport or in an active tab, reveal it sooner
-        if (!el.classList.contains('reveal-on-scroll')) {
-            el.classList.add('reveal-on-scroll');
-        }
-        
-        // If it's visible already, just reveal it
+    // Only observe elements that ALREADY have the class in HTML
+    // Do NOT add it dynamically as it can hide content if JS/Observer fails
+    document.querySelectorAll('.reveal-on-scroll').forEach(el => {
+        // If it's visible already, just reveal it immediately
         const rect = el.getBoundingClientRect();
         if (rect.top < window.innerHeight && rect.bottom > 0) {
             el.classList.add('revealed');
@@ -531,6 +536,13 @@ function initializeScrollReveal() {
             observer.observe(el);
         }
     });
+
+    // Emergency Fallback: Reveal all submissions cards on load to be 100% sure
+    setTimeout(() => {
+        document.querySelectorAll('.tab-content.active .card, .tab-content.active .data-table').forEach(el => {
+            el.classList.add('revealed');
+        });
+    }, 500);
 }
 
 function initializeButtonRipples() {
