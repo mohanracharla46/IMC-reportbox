@@ -319,6 +319,13 @@ function switchTab(tabName, eventObj = null) {
     const selectedTab = document.getElementById(`${tabName}-tab`);
     if (selectedTab) {
         selectedTab.classList.add('active');
+        
+        // REVEAL FIX: If the tab has reveal-on-scroll elements, reveal them immediately
+        const reveals = selectedTab.querySelectorAll('.reveal-on-scroll');
+        reveals.forEach(el => {
+            el.classList.add('revealed');
+        });
+
         // Add animation class
         selectedTab.classList.remove('scale-up');
         void selectedTab.offsetWidth; // Trigger reflow
@@ -496,8 +503,8 @@ function validateInput(input) {
 // ========== Scroll Reveal Logic ==========
 function initializeScrollReveal() {
     const observerOptions = {
-        threshold: 0.1,
-        rootMargin: '0px 0px -50px 0px'
+        threshold: 0.05, // Lower threshold for more reliable triggering
+        rootMargin: '0px 0px 50px 0px' // Positive margin to trigger BEFORE it enters
     };
 
     const observer = new IntersectionObserver((entries) => {
@@ -509,9 +516,20 @@ function initializeScrollReveal() {
         });
     }, observerOptions);
 
+    // Only apply to elements that are currently visible (not in hidden tabs)
     document.querySelectorAll('.card, .stats-grid, .status-card, .data-table').forEach(el => {
-        el.classList.add('reveal-on-scroll');
-        observer.observe(el);
+        // Fallback: If it's already in the viewport or in an active tab, reveal it sooner
+        if (!el.classList.contains('reveal-on-scroll')) {
+            el.classList.add('reveal-on-scroll');
+        }
+        
+        // If it's visible already, just reveal it
+        const rect = el.getBoundingClientRect();
+        if (rect.top < window.innerHeight && rect.bottom > 0) {
+            el.classList.add('revealed');
+        } else {
+            observer.observe(el);
+        }
     });
 }
 
