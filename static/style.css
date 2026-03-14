@@ -2058,16 +2058,22 @@ body {
     }
 }
 
-/* ========== Animation Classes - DISABLED for safety ========== */
+/* ========== Animation Classes ========== */
+/* CSS-only reveal for browsers that don't run JS correctly */
 .reveal-on-scroll {
-    opacity: 1 !important;
-    transform: none !important;
-    visibility: visible !important;
+    transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Only hide if the browser specifically hasn't added the revealed class yet */
+/* BUT to be 100% safe, we will make it visible by default and only hide if JS is active */
+body.js-enabled .reveal-on-scroll:not(.revealed) {
+    opacity: 0;
+    transform: translateY(30px);
 }
 
 .reveal-on-scroll.revealed {
-    opacity: 1 !important;
-    transform: none !important;
+    opacity: 1;
+    transform: translateY(0);
 }
 
 /* Delay for children if needed */
