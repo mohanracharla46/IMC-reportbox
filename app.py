@@ -196,6 +196,27 @@ def init_db():
         )
     ''')
     
+    # Create clients table
+    cursor.execute(f'''
+        CREATE TABLE IF NOT EXISTS clients (
+            id {id_type},
+            name TEXT UNIQUE NOT NULL,
+            category TEXT DEFAULT 'Corporate'
+        )
+    ''')
+    
+    # Seed clients if empty
+    cursor.execute('SELECT COUNT(*) FROM clients')
+    if cursor.fetchone()[0] == 0:
+        default_clients = [
+            ('IMC', 'Corporate'), ('Cornext', 'Corporate'), ('AIC', 'Corporate'), 
+            ('Yuvatha', 'Corporate'), ('Raksha', 'Corporate'), ('RMR', 'Political'), 
+            ('RSR', 'Political'), ('SG', 'Political'), ('JKR', 'Political'), 
+            ('Degala', 'Political')
+        ]
+        for name, cat in default_clients:
+            cursor.execute(f'INSERT INTO clients (name, category) VALUES ({q}, {q})', (name, cat))
+
     # Create work_types table
     cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS work_types (
@@ -423,7 +444,6 @@ def employee_dashboard():
     
     raw_streak = format_streak_dates(raw_streak_results)
     
-    # Get client distribution for the user
     client_distribution_results = execute_query(conn,
         '''SELECT client_name, SUM(CAST(quantity AS INTEGER)) as total_qty
            FROM submissions
@@ -433,6 +453,10 @@ def employee_dashboard():
     ).fetchall()
     
     client_distribution = [dict(row) for row in client_distribution_results]
+    
+    # Define clients list from database
+    clients_raw = execute_query(conn, "SELECT name FROM clients ORDER BY name").fetchall()
+    all_clients = [r['name'] for r in clients_raw]
     
     conn.close()
     
@@ -444,6 +468,7 @@ def employee_dashboard():
         recent_submissions=recent_submissions,
         raw_streak=raw_streak,
         client_distribution=client_distribution,
+        all_clients=all_clients,
         now=datetime.now()
     )
 
@@ -558,7 +583,7 @@ def admin_dashboard():
                u.email as employee_email, 
                u.employment_type
         FROM submissions s
-        JOIN users u ON s.user_id = u.id
+        LEFT JOIN users u ON s.user_id = u.id
         WHERE 1=1
     '''
     params = []
@@ -603,7 +628,7 @@ def admin_dashboard():
         e_dict = dict(e)
         # Get all submissions for this employee for the current month
         e_submissions = execute_query(conn, 
-            'SELECT work_type, quantity FROM submissions WHERE user_id = ? AND strftime("%Y-%m", date) = ?',
+            'SELECT s.work_type, s.quantity FROM submissions s LEFT JOIN users u ON s.user_id = u.id WHERE s.user_id = ? AND strftime("%Y-%m", s.date) = ?',
             (e['id'], current_month)
         ).fetchall()
         
@@ -633,6 +658,10 @@ def admin_dashboard():
         (date.today().isoformat(),)
     ).fetchone()['count']
     
+    # Define clients list from database
+    clients_raw = execute_query(conn, "SELECT name FROM clients ORDER BY name").fetchall()
+    all_clients = [r['name'] for r in clients_raw]
+    
     conn.close()
     
     return render_template(
@@ -648,6 +677,7 @@ def admin_dashboard():
         start_date=start_date,
         end_date=end_date,
         employment_type_filter=employment_type_filter,
+        all_clients=all_clients,
         now=datetime.now()
     )
 
@@ -1321,17 +1351,16 @@ def download_filtered_reports():
     
     return response
 
+
 @app.route('/profile', methods=['GET', 'POST'])
 @login_required
 def profile():
     """Handle user profile updates"""
     conn = get_db_connection()
-    
     if request.method == 'POST':
         name = request.form.get('name', '').strip()
         password = request.form.get('password', '').strip()
         confirm_password = request.form.get('confirm_password', '').strip()
-        
         if not name:
             flash('Name is required.', 'error')
         elif password and password != confirm_password:
@@ -1350,10 +1379,8 @@ def profile():
                 flash('Profile updated successfully!', 'success')
             except Exception as e:
                 flash(f'Error updating profile: {str(e)}', 'error')
-                
     user = execute_query(conn, 'SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
     conn.close()
-    
     return render_template('profile.html', user=user)
 
 @app.route('/report/edit/<int:report_id>', methods=['GET', 'POST'])
@@ -1362,20 +1389,15 @@ def edit_report(report_id):
     """Edit an existing work report"""
     conn = get_db_connection()
     report = execute_query(conn, 'SELECT * FROM submissions WHERE id = ?', (report_id,)).fetchone()
-    
     if not report:
         conn.close()
         flash('Report not found.', 'error')
         return redirect(url_for('index'))
-    
     report = dict(report)
-        
-    # Check permissions
     if session['role'] != 'admin' and report['user_id'] != session['user_id']:
         conn.close()
         flash('Access denied.', 'error')
         return redirect(url_for('index'))
-        
     if request.method == 'POST':
         work_text = request.form.get('work_text', '').strip()
         client_category = request.form.get('client_category', '').strip()
@@ -1384,15 +1406,10 @@ def edit_report(report_id):
         work_type = request.form.get('work_type', '').strip()
         other_work_type_name = request.form.get('other_work_type_name', '').strip()
         quantity = request.form.get('quantity', '1')
-        
-        # Handle 'Other' client name
         if client_name in ['Others', 'Other'] and other_client_name:
             client_name = other_client_name
-            
-        # Handle 'Other' work type
         if work_type == 'Other' and other_work_type_name:
             work_type = other_work_type_name
-        
         if not work_text or not client_name or not work_type:
             flash('All fields marked with * are required.', 'error')
         else:
@@ -1405,20 +1422,13 @@ def edit_report(report_id):
                     filename = f"{session['user_id']}_{timestamp}_{filename}"
                     new_file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
                     file.save(new_file_path)
-                    
-                    # Delete old file if exists
                     if file_path and os.path.exists(file_path):
-                        try:
-                            os.remove(file_path)
-                        except:
-                            pass
+                        try: os.remove(file_path)
+                        except: pass
                     file_path = new_file_path
-            
             try:
                 execute_query(conn, 
-                    '''UPDATE submissions 
-                       SET work_text = ?, file_path = ?, client_category = ?, client_name = ?, work_type = ?, quantity = ? 
-                       WHERE id = ?''',
+                    '''UPDATE submissions SET work_text = ?, file_path = ?, client_category = ?, client_name = ?, work_type = ?, quantity = ? WHERE id = ?''',
                     (work_text, file_path, client_category, client_name, work_type, quantity, report_id)
                 )
                 conn.commit()
@@ -1426,7 +1436,6 @@ def edit_report(report_id):
                 return redirect(url_for('index'))
             except Exception as e:
                 flash(f'Error updating report: {str(e)}', 'error')
-    
     conn.close()
     return render_template('edit_report.html', report=report)
 
@@ -1436,303 +1445,228 @@ def delete_report(report_id):
     """Delete a work report"""
     conn = get_db_connection()
     report = execute_query(conn, 'SELECT * FROM submissions WHERE id = ?', (report_id,)).fetchone()
-    
     if not report:
         conn.close()
         flash('Report not found.', 'error')
         return redirect(url_for('index'))
-        
-    # Check permissions
     if session['role'] != 'admin' and report['user_id'] != session['user_id']:
         conn.close()
         flash('Access denied.', 'error')
         return redirect(url_for('index'))
-        
     try:
-        # Delete file if exists
         if report['file_path'] and os.path.exists(report['file_path']):
-            try:
-                os.remove(report['file_path'])
-            except:
-                pass
-                
+            try: os.remove(report['file_path'])
+            except: pass
         execute_query(conn, 'DELETE FROM submissions WHERE id = ?', (report_id,))
         conn.commit()
         flash('Report deleted successfully!', 'success')
     except Exception as e:
         flash(f'Error deleting report: {str(e)}', 'error')
-        
     conn.close()
     return redirect(url_for('index'))
+
+def get_filtered_work_analysis_query_and_params(request_args):
+    """Helper to get query and parameters for work analysis based on filters"""
+    filter_client = request_args.get('client', '').strip()
+    other_client = request_args.get('other_client', '').strip()
+    filter_person = request_args.get('person', '').strip()
+    filter_start = request_args.get('start_date', '').strip()
+    filter_end = request_args.get('end_date', '').strip()
+    filter_type = request_args.get('type', 'Both').strip()
+    
+    if filter_client == 'Other' and other_client:
+        filter_client = other_client
+    query = '''
+        SELECT s.date, COALESCE(s.employee_name, u.name) as empname, s.client_name as client,
+               s.work_type as worktype, s.quantity, u.employment_type, s.work_text as description
+        FROM submissions s LEFT JOIN users u ON s.user_id = u.id WHERE 1=1
+    '''
+    params = []
+    if filter_client:
+        query += ' AND LOWER(s.client_name) = LOWER(?)'
+        params.append(filter_client)
+    if filter_person:
+        query += ' AND (LOWER(u.name) = LOWER(?) OR LOWER(s.employee_name) = LOWER(?))'
+        params.append(filter_person); params.append(filter_person)
+    if filter_start:
+        query += ' AND s.date >= ?'; params.append(filter_start)
+    if filter_end:
+        query += ' AND s.date <= ?'; params.append(filter_end)
+    if filter_type != 'Both':
+        query += ' AND u.employment_type = ?'; params.append(filter_type)
+        
+    return query, params, filter_client, filter_person, filter_start, filter_end, filter_type
 
 @app.route('/admin/work-analysis')
 @admin_required
 def work_analysis():
     """Work Analysis - show detailed list of work reports with individual entries"""
     conn = get_db_connection()
-
-    # Filter parameters
-    filter_client = request.args.get('client', '').strip()
-    other_client = request.args.get('other_client', '').strip()
-    filter_person = request.args.get('person', '').strip()
-    filter_start = request.args.get('start_date', '').strip()
-    filter_end = request.args.get('end_date', '').strip()
-
-    if filter_client == 'Other' and other_client:
-        filter_client = other_client
-
-    # Define standard clients list based on corporate/political categories
-    all_clients = ['IMC', 'Cornext', 'AIC', 'Yuvatha', 'Raksha', 'RMR', 'RSR', 'SG', 'JKR', 'Degala']
-
-    # Get all employees and freelancers for the person dropdown
-    all_persons_raw = execute_query(conn,
-        "SELECT DISTINCT name, employment_type FROM users WHERE role = 'employee' ORDER BY name"
-    ).fetchall()
-    # Also get admin-submitted employee_name values (freelancer/other names added via admin form)
-    extra_names_raw = execute_query(conn,
-        "SELECT DISTINCT employee_name FROM submissions WHERE employee_name IS NOT NULL AND employee_name != '' ORDER BY employee_name"
-    ).fetchall()
+    query, params, filter_client, filter_person, filter_start, filter_end, filter_type = get_filtered_work_analysis_query_and_params(request.args)
+    # Define clients list from database
+    clients_raw = execute_query(conn, "SELECT name FROM clients ORDER BY name").fetchall()
+    all_clients = [r['name'] for r in clients_raw]
+    all_persons_raw = execute_query(conn, "SELECT DISTINCT name, employment_type FROM users WHERE role = 'employee' ORDER BY name").fetchall()
+    extra_names_raw = execute_query(conn, "SELECT DISTINCT employee_name FROM submissions WHERE employee_name IS NOT NULL AND employee_name != '' ORDER BY employee_name").fetchall()
     extra_names = [r['employee_name'] for r in extra_names_raw]
-
     all_persons = [{'name': r['name'], 'employment_type': r['employment_type']} for r in all_persons_raw]
-    # Add extra names that are not already in all_persons
     existing_names = {p['name'] for p in all_persons}
     for en in extra_names:
-        if en not in existing_names:
-            all_persons.append({'name': en, 'employment_type': 'freelancer'})
-
-    # Build query for detailed individual reports
-    query = '''
-        SELECT 
-            s.date,
-            COALESCE(s.employee_name, u.name) as empname,
-            s.client_name as client,
-            s.work_type as worktype,
-            s.quantity,
-            u.employment_type,
-            s.work_text as description
-        FROM submissions s
-        JOIN users u ON s.user_id = u.id
-        WHERE 1=1
-    '''
-    params = []
-
-    if filter_client:
-        query += ' AND LOWER(s.client_name) = LOWER(?)'
-        params.append(filter_client)
-
-    if filter_person:
-        query += ' AND (LOWER(u.name) = LOWER(?) OR LOWER(s.employee_name) = LOWER(?))'
-        params.append(filter_person)
-        params.append(filter_person)
-
-    if filter_start:
-        query += ' AND s.date >= ?'
-        params.append(filter_start)
-
-    if filter_end:
-        query += ' AND s.date <= ?'
-        params.append(filter_end)
-
-    query += ' ORDER BY s.date DESC, empname ASC'
-
-    detailed_submissions = [dict(r) for r in execute_query(conn, query, params).fetchall()]
-
-    # Calculate price/amount for each submission
+        if en not in existing_names: all_persons.append({'name': en, 'employment_type': 'freelancer'})
+    query_with_order = query + ' ORDER BY s.date DESC, empname ASC'
+    detailed_submissions = [dict(r) for r in execute_query(conn, query_with_order, params).fetchall()]
     for sub in detailed_submissions:
         sub['price'] = calculate_submission_amount(sub['worktype'], sub['quantity'], sub['employment_type'])
-
-    # Build aggregated data for charts (to maintain compatibility)
     from collections import defaultdict
-    pivot = defaultdict(lambda: defaultdict(int))
-    person_client_meta = {}
-    work_types_set = set()
-
+    pivot = defaultdict(lambda: defaultdict(int)); person_client_meta = {}; work_types_set = set()
     for sub in detailed_submissions:
-        key = (sub['empname'], sub['client'])
-        wt = sub['worktype']
-        qty = int(sub['quantity'] or 0)
-        pivot[key][wt] += qty
-        if wt:
-            work_types_set.add(wt)
+        key = (sub['empname'], sub['client']); wt = sub['worktype']; qty = int(sub['quantity'] or 0)
+        pivot[key][wt] += qty; work_types_set.add(wt)
         if key not in person_client_meta:
-            person_client_meta[key] = {
-                'person_name': sub['empname'],
-                'employment_type': sub['employment_type'],
-                'client_name': sub['client'],
-            }
-
-    all_work_types = sorted(list(work_types_set))
-    chart_rows = []
+            person_client_meta[key] = {'person_name': sub['empname'], 'employment_type': sub['employment_type'], 'client_name': sub['client']}
+    all_work_types = sorted(list(work_types_set)); chart_rows = []
     for key in sorted(pivot.keys(), key=lambda k: (k[0].lower(), k[1].lower() if k[1] else '')):
-        meta = person_client_meta[key]
-        work_counts = pivot[key]
-        total = sum(work_counts.values())
-        chart_rows.append({
-            'person_name': meta['person_name'],
-            'employment_type': meta['employment_type'],
-            'client_name': meta['client_name'],
-            'work_counts': work_counts,
-            'total': total,
-        })
-
-    # Query for the Activity Streak chart (daily quantities per person)
-    streak_query = '''
-        SELECT 
-            COALESCE(s.employee_name, u.name) as person_name,
-            s.date as work_date,
-            SUM(CAST(s.quantity AS INTEGER)) as daily_qty
-        FROM submissions s
-        JOIN users u ON s.user_id = u.id
-        WHERE 1=1
-    '''
-    # We apply the same dynamic WHERE clauses as the detailed query
-    if filter_client:
-        streak_query += ' AND LOWER(s.client_name) = LOWER(?)'
-    if filter_person:
-        streak_query += ' AND (LOWER(u.name) = LOWER(?) OR LOWER(s.employee_name) = LOWER(?))'
-    if filter_start:
-        streak_query += ' AND s.date >= ?'
-    if filter_end:
-        streak_query += ' AND s.date <= ?'
-
+        meta = person_client_meta[key]; work_counts = pivot[key]; total = sum(work_counts.values())
+        chart_rows.append({'person_name': meta['person_name'], 'employment_type': meta['employment_type'], 'client_name': meta['client_name'], 'work_counts': work_counts, 'total': total})
+    streak_query = 'SELECT COALESCE(s.employee_name, u.name) as person_name, s.date as work_date, SUM(CAST(s.quantity AS INTEGER)) as daily_qty FROM submissions s JOIN users u ON s.user_id = u.id WHERE 1=1'
+    if filter_client: streak_query += ' AND LOWER(s.client_name) = LOWER(?)'
+    if filter_person: streak_query += ' AND (LOWER(u.name) = LOWER(?) OR LOWER(s.employee_name) = LOWER(?))'
+    if filter_start: streak_query += ' AND s.date >= ?'
+    if filter_end: streak_query += ' AND s.date <= ?'
     streak_query += ' GROUP BY COALESCE(s.employee_name, u.name), s.date ORDER BY s.date ASC'
     raw_streak_results = execute_query(conn, streak_query, params).fetchall()
-    raw_streak = format_streak_dates(raw_streak_results)
+    raw_streak = format_streak_dates(raw_streak_results); conn.close()
+    return render_template('work_analysis.html', all_clients=all_clients, all_persons=all_persons, filter_client=filter_client, filter_person=filter_person, filter_type=filter_type, filter_start=filter_start, filter_end=filter_end, all_work_types=all_work_types, table_rows=chart_rows, detailed_submissions=detailed_submissions, raw_streak=raw_streak)
 
+@app.route('/admin/work-analysis/export')
+@admin_required
+def export_work_analysis():
+    """Export filtered work analysis data to Excel"""
+    from flask import make_response
+    conn = get_db_connection()
+    query, params, _, _, _, _ = get_filtered_work_analysis_query_and_params(request.args)
+    query_with_order = query + ' ORDER BY s.date DESC, empname ASC'
+    records = [dict(r) for r in execute_query(conn, query_with_order, params).fetchall()]
     conn.close()
-
-    return render_template(
-        'work_analysis.html',
-        all_clients=all_clients,
-        all_persons=all_persons,
-        filter_client=filter_client,
-        filter_person=filter_person,
-        filter_start=filter_start,
-        filter_end=filter_end,
-        all_work_types=all_work_types,
-        table_rows=chart_rows, # For the charts
-        detailed_submissions=detailed_submissions, # For the new table
-        raw_streak=raw_streak,
-    )
+    if not records:
+        flash('No data found to export with these filters.', 'info')
+        return redirect(url_for('work_analysis', **request.args))
+    data = []; total_qty = 0; total_price = 0
+    for r in records:
+        price = calculate_submission_amount(r['worktype'], r['quantity'], r['employment_type'])
+        data.append({'Date': r['date'], 'Employee Name': r['empname'], 'Employment Type': r['employment_type'].title(), 'Client': r['client'] or '—', 'Work Type': r['worktype'] or '—', 'Quantity': r['quantity'], 'Price (₹)': price, 'Description': r['description']})
+        total_qty += int(r['quantity'] or 0); total_price += price
+    df = pd.DataFrame(data); output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Work Analysis'); worksheet = writer.sheets['Work Analysis']
+        last_row = len(df) + 2; worksheet.cell(row=last_row, column=1, value="GRAND TOTAL"); worksheet.cell(row=last_row, column=6, value=total_qty); worksheet.cell(row=last_row, column=7, value=total_price)
+        from openpyxl.styles import Font, Alignment, PatternFill
+        bold_font = Font(bold=True); center_align = Alignment(horizontal='center'); header_font = Font(bold=True, color="FFFFFF"); header_fill = PatternFill(start_color="1F2937", end_color="1F2937", fill_type="solid")
+        for cell in worksheet[1]: cell.font = header_font; cell.fill = header_fill; cell.alignment = center_align
+        for col in range(1, 9):
+            cell = worksheet.cell(row=last_row, column=col); cell.font = bold_font
+            if col in [6, 7]: cell.fill = PatternFill(start_color="FDE68A", end_color="FDE68A", fill_type="solid")
+        for i, col in enumerate(df.columns):
+            column_len = max(df[col].astype(str).map(len).max(), len(str(col))) + 2
+            worksheet.column_dimensions[chr(65 + i)].width = min(column_len, 60)
+    output.seek(0); response = make_response(output.getvalue()); timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    response.headers["Content-Disposition"] = f"attachment; filename=Work_Analysis_{timestamp}.xlsx"
+    response.headers["Content-Type"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    return response
 
 @app.route('/admin/client-statistics')
 @admin_required
 def client_statistics():
     """Client Statistics - show how much work and money spent per client"""
     conn = get_db_connection()
-
-    # Filter parameters
     filter_client = request.args.get('client', '').strip()
     other_client = request.args.get('other_client', '').strip()
     filter_start = request.args.get('start_date', '').strip()
     filter_end = request.args.get('end_date', '').strip()
     filter_work_type = request.args.get('work_type', '').strip()
+    if filter_client == 'Other' and other_client: filter_client = other_client
+    # Define clients list from database
+    clients_raw = execute_query(conn, "SELECT name FROM clients ORDER BY name").fetchall()
+    all_clients = [r['name'] for r in clients_raw]
 
-    if filter_client == 'Other' and other_client:
-        filter_client = other_client
-
-    # Define standard clients list
-    all_clients = ['IMC', 'Cornext', 'AIC', 'Yuvatha', 'Raksha', 'RMR', 'RSR', 'SG', 'JKR', 'Degala']
-
-    # Collect all unique work types for the filter dropdown
     all_work_types_raw = execute_query(conn, "SELECT DISTINCT work_type FROM submissions WHERE work_type IS NOT NULL").fetchall()
     all_work_types = sorted(set(r['work_type'] for r in all_work_types_raw if r['work_type']))
-
-    # Build query
-    query = '''
-        SELECT 
-            s.client_name,
-            s.work_type,
-            u.employment_type,
-            SUM(CAST(s.quantity AS INTEGER)) as total_qty
-        FROM submissions s
-        JOIN users u ON s.user_id = u.id
-        WHERE 1=1
-    '''
+    query = 'SELECT s.client_name, s.work_type, u.employment_type, SUM(CAST(s.quantity AS INTEGER)) as total_qty FROM submissions s JOIN users u ON s.user_id = u.id WHERE 1=1'
     params = []
-
-    if filter_client:
-        query += ' AND LOWER(s.client_name) = LOWER(?)'
-        params.append(filter_client)
-
-    if filter_start:
-        query += ' AND s.date >= ?'
-        params.append(filter_start)
-
-    if filter_end:
-        query += ' AND s.date <= ?'
-        params.append(filter_end)
-
-    if filter_work_type:
-        query += ' AND LOWER(s.work_type) = LOWER(?)'
-        params.append(filter_work_type)
-
+    if filter_client: query += ' AND LOWER(s.client_name) = LOWER(?)'; params.append(filter_client)
+    if filter_start: query += ' AND s.date >= ?'; params.append(filter_start)
+    if filter_end: query += ' AND s.date <= ?'; params.append(filter_end)
+    if filter_work_type: query += ' AND LOWER(s.work_type) = LOWER(?)'; params.append(filter_work_type)
     query += ' GROUP BY s.client_name, s.work_type, u.employment_type ORDER BY s.client_name, s.work_type'
-
     raw_rows = [dict(r) for r in execute_query(conn, query, params).fetchall()]
-    conn.close()
-
-    # Calculate amount and group by (Client, Work Type)
     from collections import defaultdict
     client_stats = defaultdict(lambda: {'total_qty': 0, 'total_amount': 0})
-    
     for row in raw_rows:
-        client = row['client_name'] or 'Unknown'
-        wt = row['work_type'] or 'Unknown'
-        qty = row['total_qty'] or 0
-        emp_type = row['employment_type'] or 'inhouse'
-        
-        amt = calculate_submission_amount(wt, qty, emp_type)
-        
-        key = (client, wt)
-        client_stats[key]['total_qty'] += qty
-        client_stats[key]['total_amount'] += amt
-
-    # Convert to list for the template
+        client = row['client_name'] or 'Unknown'; wt = row['work_type'] or 'Unknown'; qty = row['total_qty'] or 0; emp_type = row['employment_type'] or 'inhouse'
+        amt = calculate_submission_amount(wt, qty, emp_type); key = (client, wt); client_stats[key]['total_qty'] += qty; client_stats[key]['total_amount'] += amt
     table_rows = []
-    for (client, wt), stats in client_stats.items():
-        table_rows.append({
-            'client_name': client,
-            'work_type': wt,
-            'total_qty': stats['total_qty'],
-            'total_amount': stats['total_amount']
-        })
-        
-    # Sort the table rows
+    for (client, wt), stats in client_stats.items(): table_rows.append({'client_name': client, 'work_type': wt, 'total_qty': stats['total_qty'], 'total_amount': stats['total_amount']})
     table_rows.sort(key=lambda x: (x['client_name'].lower(), x['work_type'].lower()))
+    
+    # Also fetch all client records for management UI
+    clients_list = execute_query(conn, "SELECT * FROM clients ORDER BY name").fetchall()
+    conn.close()
+    
+    return render_template('client_statistics.html', all_clients=all_clients, all_work_types=all_work_types, filter_client=filter_client, filter_start=filter_start, filter_end=filter_end, filter_work_type=filter_work_type, table_rows=table_rows, clients_list=clients_list)
 
-    return render_template(
-        'client_statistics.html',
-        all_clients=all_clients,
-        all_work_types=all_work_types,
-        filter_client=filter_client,
-        filter_start=filter_start,
-        filter_end=filter_end,
-        filter_work_type=filter_work_type,
-        table_rows=table_rows
-    )
+@app.route('/admin/clients/add', methods=['POST'])
+@admin_required
+def add_client():
+    """Add a new standard client with category"""
+    name = request.form.get('name', '').strip()
+    category = request.form.get('category', 'Corporate')
+    if not name:
+        flash('Client name is required.', 'error')
+    else:
+        conn = get_db_connection()
+        try:
+            execute_query(conn, 'INSERT INTO clients (name, category) VALUES (?, ?)', (name, category))
+            conn.commit()
+            flash(f'Client "{name}" ({category}) added successfully!', 'success')
+        except Exception as e:
+            flash(f'Error adding client: {str(e)}', 'error')
+        conn.close()
+    return redirect(url_for('client_statistics'))
 
+@app.route('/admin/clients/delete/<int:client_id>', methods=['POST'])
+@admin_required
+def delete_client(client_id):
+    """Delete a standard client"""
+    conn = get_db_connection()
+    try:
+        execute_query(conn, 'DELETE FROM clients WHERE id = ?', (client_id,))
+        conn.commit()
+        flash('Client deleted successfully!', 'success')
+    except Exception as e:
+        flash(f'Error deleting client: {str(e)}', 'error')
+    conn.close()
+    return redirect(url_for('client_statistics'))
 
+@app.route('/api/clients')
+def get_clients_api():
+    """API to get current standard clients list"""
+    conn = get_db_connection()
+    clients = execute_query(conn, "SELECT name, category FROM clients ORDER BY name").fetchall()
+    conn.close()
+    
+    # Categorize results
+    results = {'Political': [], 'Corporate': []}
+    for c in clients:
+        cat = c['category'] if c['category'] in ['Political', 'Corporate'] else 'Corporate'
+        results[cat].append(c['name'])
+    
+    # Ensure "Other/Others" is at the end
+    results['Political'].append('Others')
+    results['Corporate'].append('Other')
+    return jsonify(results)
 
 if __name__ == '__main__':
-    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-    
-    # Database is initialized at the top level, no need to call it again here
-    # unless we want to ensure it's fresh on every restart. 
-    # But it's already called on line 166.
-    
-    print("\n" + "="*60)
-    print("Work Report Management System")
-    print("="*60)
-    print("\nAdmin Login Details:")
-    print("-" * 60)
-    print("  Email: prashanth@iramediaconcepts.com")
-    print("  Password: admin123")
-    print("="*60 + "\n")
-
-    
-    # Run the Flask app
-    port = int(os.getenv("PORT", 5000))
+    from os import makedirs, getenv
+    makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    port = int(getenv("PORT", 5000))
     app.run(debug=True, host='0.0.0.0', port=port)
-    

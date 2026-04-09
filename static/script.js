@@ -102,19 +102,53 @@ function setupClientSelection(prefix = '') {
         ]
     };
 
-    // Fetch work types from API
-    fetch('/api/work-types')
-        .then(response => response.json())
+    // Fetch clients from API (Dynamic override)
+    fetch('/api/clients', { cache: 'no-store' })
+        .then(response => {
+            if (!response.ok) throw new Error('Network response was not ok');
+            return response.json();
+        })
+        .then(data => {
+            if (data && (data.Political || data.Corporate)) {
+                // Merge data, but keep unique names
+                for (const cat in data) {
+                    if (clientOptions[cat]) {
+                        // Create a unique set of names
+                        const combined = [...clientOptions[cat], ...data[cat]];
+                        clientOptions[cat] = [...new Set(combined)];
+                    } else {
+                        clientOptions[cat] = data[cat];
+                    }
+                }
+                console.log('Clients updated from database');
+                if (categorySelect.value) {
+                    updateClientNames();
+                }
+            }
+        })
+        .catch(err => {
+            console.warn('Using fallback client list:', err);
+        });
+
+    // Fetch work types from API (Dynamic override)
+    fetch('/api/work-types', { cache: 'no-store' })
+        .then(response => {
+            if (!response.ok) throw new Error('Network response was not ok');
+            return response.json();
+        })
         .then(data => {
             if (data && (data.Political || data.Corporate)) {
                 workTypeOptions = data;
+                console.log('Work types loaded from database');
                 // Update dropdowns if category is already selected
                 if (categorySelect.value) {
                     updateWorkTypes(categorySelect.value);
                 }
             }
         })
-        .catch(err => console.error('Error fetching work types:', err));
+        .catch(err => {
+            console.warn('Using fallback work types:', err);
+        });
 
     function updateClientNames() {
         const category = categorySelect.value;

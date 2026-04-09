@@ -263,6 +263,77 @@
     </div>
     {% endif %}
 
+    <div style="margin-top: 2rem;">
+        <div class="cs-header" style="margin-bottom: 1rem;">
+            <div class="cs-header-icon" style="background: var(--primary-bg); color: var(--primary);">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+            </div>
+            <div>
+                <h2 style="font-size: 1.25rem; font-weight: 700; margin: 0;">Manage Standard Clients</h2>
+                <p style="font-size: 0.8rem; color: var(--gray-500); margin: 0;">Add or remove clients from the standard list</p>
+            </div>
+        </div>
+
+        <div class="card" style="padding: 1.5rem; border-radius: var(--radius-xl);">
+            <div style="display: flex; flex-wrap: wrap; gap: 2rem;">
+                <!-- Add Client Form -->
+                <div style="flex: 1; min-width: 250px;">
+                    <form action="{{ url_for('add_client') }}" method="POST">
+                        <div class="form-group" style="margin-bottom: 1rem;">
+                            <label class="form-label">Client Name</label>
+                            <input type="text" name="name" class="form-input" placeholder="e.g. New Company" required>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 1rem;">
+                            <label class="form-label">Category</label>
+                            <select name="category" class="form-input" required>
+                                <option value="Corporate">Corporate</option>
+                                <option value="Political">Political</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-full-mobile">Add Client</button>
+                    </form>
+                </div>
+
+                <!-- Clients List -->
+                <div style="flex: 2; min-width: 300px;">
+                    <div class="cs-table-wrap" style="box-shadow: none;">
+                        <table class="cs-table">
+                            <thead>
+                                <tr>
+                                    <th>Client Name</th>
+                                    <th>Category</th>
+                                    <th style="text-align: right;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for cl in clients_list %}
+                                <tr>
+                                    <td style="font-weight: 600;">{{ cl.name }}</td>
+                                    <td>
+                                        <span class="badge" style="background: {% if cl.category == 'Political' %}#fff5f5{% else %}#f0f9ff{% endif %}; color: {% if cl.category == 'Political' %}#c53030{% else %}#0369a1{% endif %}; border: 1px solid currentColor; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">
+                                            {{ cl.category }}
+                                        </span>
+                                    </td>
+                                    <td style="text-align: right;">
+                                        <form action="{{ url_for('delete_client', client_id=cl.id) }}" method="POST" onsubmit="return confirm('Are you sure you want to delete this client? Entries already in the database will remain but the client will be removed from the selection list.')">
+                                            <button type="submit" class="btn btn-ghost" style="color: var(--error); border-color: var(--error); padding: 4px 8px; font-size: 0.8rem;">Delete</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div style="margin-top: 1.5rem;">
         <a href="{{ url_for('admin_dashboard') }}" class="btn btn-ghost">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">

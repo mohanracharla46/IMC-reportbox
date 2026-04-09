@@ -366,6 +366,14 @@
                         </svg>
                         Filter
                     </button>
+                    <a href="{{ url_for('export_work_analysis', **request.args) }}" class="btn btn-success" style="background: var(--accent-green); border-color: var(--accent-green); color: white;">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                        Download Excel
+                    </a>
                     <a href="{{ url_for('work_analysis') }}" class="btn btn-ghost">Clear</a>
                 </div>
 
@@ -505,6 +513,7 @@
         }
 
         // Prepare Labels (Person Name + Client Name)
+        console.log(`Initializing charts with ${rawData.length} records...`);
         const labels = rawData.map(row => {
             const client = row.client_name ? ` (${row.client_name})` : '';
             return `${row.person_name}${client}`;
