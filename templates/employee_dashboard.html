@@ -1,0 +1,650 @@
+{% extends "base.html" %}
+
+{% block title %}Employee Dashboard - Work Report System{% endblock %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <div class="header-content">
+            <h1 class="page-title">{{ session['user_name'] }}'s Dashboard</h1>
+            <p class="page-subtitle">Submit and track your daily work reports</p>
+        </div>
+        <div class="header-date">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            <input type="date" name="submission_date" id="submission-date" form="report-form"
+                value="{{ now.strftime('%Y-%m-%d') }}" max="{{ now.strftime('%Y-%m-%d') }}" required
+                style="background: transparent; border: 1px solid var(--gray-300); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 0.9rem; color: var(--text-primary);">
+        </div>
+    </div>
+
+    <!-- Status Section -->
+    <div class="status-section" style="margin-bottom: var(--spacing-xl);">
+        <div class="status-card {% if submitted_today %}status-submitted{% else %}status-pending{% endif %}">
+            <div class="status-header">
+                <div class="status-icon">
+                    {% if submitted_today %}
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.5">
+                        <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    {% else %}
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.5">
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    {% endif %}
+                </div>
+                <div class="status-info">
+                    <h3 class="status-title">Today's Status</h3>
+                    <p class="status-label">
+                        {% if submitted_today %}
+                        {{ submission_count_today }} Submission{{ 's' if submission_count_today > 1 else '' }} Today
+                        {% else %}
+                        No Submissions Yet
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+            {% if submitted_today %}
+            <p class="status-message">Great job! You can submit more if needed.
+            </p>
+            {% else %}
+            <p class="status-message">Submit your first work report for today.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="dashboard-grid" style="grid-template-columns: 1fr;">
+        <!-- Submission Form -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Submit Work Report</h2>
+                <p class="card-subtitle">You can submit multiple reports per day</p>
+            </div>
+            <form id="report-form" method="POST" action="{{ url_for('submit_report') }}" enctype="multipart/form-data"
+                class="report-form" style="padding: var(--spacing-xl);">
+
+                <!-- 1. Client Category -->
+                <!-- 2. Client Name -->
+                <div class="form-grid"
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
+                    <div class="form-group">
+                        <label for="client_category" class="form-label">Client Category <span
+                                style="color: var(--error);">*</span></label>
+                        <select id="client_category" name="client_category" class="form-input" required>
+                            <option value="" disabled selected>Select category</option>
+                            <option value="Political">Political</option>
+                            <option value="Corporate">Corporate</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="client_name" class="form-label">Client Name <span
+                                style="color: var(--error);">*</span></label>
+                        <select id="client_name" name="client_name" class="form-input" required>
+                            <option value="" disabled selected>Select client category first</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="other_client_group" class="form-group" style="display: none; margin-bottom: 1.5rem;">
+                    <label for="other_client_name" class="form-label">Other Client Name <span
+                            style="color: var(--error);">*</span></label>
+                    <input type="text" id="other_client_name" name="other_client_name" class="form-input"
+                        placeholder="Enter client name manually...">
+                </div>
+
+                <!-- 3. Work Type -->
+                <div class="form-group" style="margin-bottom: 1.5rem;">
+                    <label for="work_type" class="form-label">Work Type <span
+                            style="color: var(--error);">*</span></label>
+                    <select id="work_type" name="work_type" class="form-input" required>
+                        <option value="" disabled selected>Select category first</option>
+                    </select>
+                </div>
+
+                <div id="other_work_type_group" class="form-group" style="display: none; margin-bottom: 1.5rem;">
+                    <label for="other_work_type_name" class="form-label">Other Work Type <span
+                            style="color: var(--error);">*</span></label>
+                    <input type="text" id="other_work_type_name" name="other_work_type_name" class="form-input"
+                        placeholder="Enter work type manually...">
+                </div>
+
+                <!-- 4. Quantity -->
+                <!-- 5. Attachment -->
+                <div class="form-grid"
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
+                    <div class="form-group">
+                        <label for="quantity" class="form-label">Quantity / Count <span
+                                style="color: var(--error);">*</span></label>
+                        <input type="number" id="quantity" name="quantity" class="form-input" value="1" min="1"
+                            required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="file" class="form-label">Attachment (Optional)</label>
+                        <div class="file-upload">
+                            <input type="file" id="file" name="file" class="file-input"
+                                accept=".txt,.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif">
+                            <label for="file" class="file-label" style="height: 42px;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="17 8 12 3 7 8" />
+                                    <line x1="12" y1="3" x2="12" y2="15" />
+                                </svg>
+                                <span class="file-text">Choose file</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 6. Work Description -->
+                <div class="form-group" style="margin-bottom: 1.5rem;">
+                    <label for="work_text" class="form-label">Work Description <span
+                            style="color: var(--error);">*</span></label>
+                    <textarea id="work_text" name="work_text" class="form-textarea" rows="4"
+                        placeholder="Describe your work, accomplishments, and any challenges faced..."
+                        required></textarea>
+                    <div class="form-help">Provide a detailed summary of your activities</div>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-full-mobile">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                        <polyline points="17 21 17 13 7 13 7 21" />
+                        <polyline points="7 3 7 8 15 8" />
+                    </svg>
+                    Submit Report
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Productivity Analytics Section -->
+    <div style="display: flex; flex-wrap: wrap; gap: 1.5rem; margin-bottom: var(--spacing-xl);">
+
+        <!-- Calendar Card -->
+        <div class="card" style="margin-bottom: 0; flex: 1; min-width: 320px;">
+            <div class="card-header">
+                <h2 class="card-title">My Daily Work Streak</h2>
+                <p class="card-subtitle">Your productivity calendar</p>
+            </div>
+            <div style="padding: 1.5rem;">
+                <style>
+                    .streak-calendar {
+                        max-width: 350px;
+                        margin: 0 auto;
+                    }
+
+                    .calendar-header {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        margin-bottom: 1.2rem;
+                        font-weight: 700;
+                        color: var(--gray-800);
+                    }
+
+                    .calendar-btn {
+                        background: none;
+                        border: none;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        width: 30px;
+                        height: 30px;
+                        border-radius: 50%;
+                        color: var(--gray-600);
+                        transition: all 0.2s;
+                    }
+
+                    .calendar-btn:hover {
+                        background: var(--gray-100);
+                        color: var(--gray-900);
+                    }
+
+                    .calendar-grid {
+                        display: grid;
+                        grid-template-columns: repeat(7, 1fr);
+                        gap: 0.5rem 0.2rem;
+                        text-align: center;
+                    }
+
+                    .calendar-day-name {
+                        font-size: 0.75rem;
+                        font-weight: 600;
+                        color: var(--gray-500);
+                        margin-bottom: 0.5rem;
+                    }
+
+                    .calendar-cell {
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                    }
+
+                    .calendar-day {
+                        width: 34px;
+                        height: 34px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        border-radius: 50%;
+                        background: var(--gray-100);
+                        color: var(--gray-700);
+                        font-size: 0.85rem;
+                        font-weight: 500;
+                        transition: transform 0.2s;
+                    }
+
+                    .calendar-day.active-streak {
+                        background: #01b5b2;
+                        color: #fff;
+                        font-weight: 600;
+                        box-shadow: 0 3px 6px rgba(1, 181, 178, 0.3);
+                    }
+
+                    .calendar-day.empty-cell {
+                        background: transparent;
+                    }
+                </style>
+
+                <div class="streak-calendar">
+                    <div class="calendar-header">
+                        <button id="prev-month" class="calendar-btn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <polyline points="15 18 9 12 15 6"></polyline>
+                            </svg>
+                        </button>
+                        <span id="calendar-month-year"></span>
+                        <button id="next-month" class="calendar-btn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="calendar-grid" id="calendar-grid">
+                        <!-- Dates populating dynamically -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Client Distribution Chart -->
+        <div class="card" style="margin-bottom: 0; flex: 2; min-width: 320px;">
+            <div class="card-header">
+                <h2 class="card-title">Work Distribution by Client</h2>
+                <p class="card-subtitle">Contribution across different clients</p>
+            </div>
+            <div style="padding: 1.5rem; height: 350px;">
+                <canvas id="clientDistributionChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Recent Submissions -->
+<div class="card">
+    <div class="card-header">
+        <div class="header-info">
+            <h2 class="card-title">Recent Submissions</h2>
+            <p class="card-subtitle">Your work reports history</p>
+        </div>
+
+        <div class="card-actions">
+            <form method="GET" action="{{ url_for('employee_dashboard') }}" class="filter-mini-form">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <input type="date" name="date" class="form-input" value="{{ request.args.get('date', '') }}"
+                        style="padding: 6px 12px; height: auto;">
+                </div>
+                <button type="submit" class="btn btn-sm btn-ghost">Filter</button>
+                {% if request.args.get('date') %}
+                <a href="{{ url_for('employee_dashboard') }}" class="btn btn-sm btn-ghost">Clear</a>
+                {% endif %}
+            </form>
+
+            <a href="{{ url_for('download_monthly_report', employee_id=session['user_id'], month=now.strftime('%Y-%m')) }}"
+                class="btn btn-sm btn-primary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Export Month
+            </a>
+        </div>
+    </div>
+
+    {% if recent_submissions %}
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Client</th>
+                    <th>Type</th>
+                    <th>Qty</th>
+                    {% if session.employment_type == 'freelancer' %}
+                    <th>Amount</th>
+                    {% endif %}
+                    <th>Work Description</th>
+                    <th>Attachment</th>
+                    <th>Submitted At</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for submission in recent_submissions %}
+                <tr>
+                    <td>
+                        <span class="date-badge">{{ submission['date'] }}</span>
+                    </td>
+                    <td>
+                        <span class="client-name">{{ submission['client_name'] or 'N/A' }}</span>
+                    </td>
+                    <td>
+                        <span class="work-type-badge">{{ submission['work_type'] or 'N/A' }}</span>
+                    </td>
+                    <td>
+                        <span class="quantity-badge">{{ submission['quantity'] or 1 }}</span>
+                    </td>
+                    {% if session.employment_type == 'freelancer' %}
+                    <td>
+                        <span class="quantity-badge"
+                            style="background: var(--success-bg); color: var(--success); font-weight: 600;">
+                            ₹{{ calculate_submission_amount(submission['work_type'], submission['quantity'],
+                            session.employment_type) }}
+                        </span>
+                    </td>
+                    {% endif %}
+                    <td>
+                        <div class="work-text">{{ submission['work_text'][:60] }}{% if
+                            submission['work_text']|length > 60 %}...{% endif %}</div>
+                    </td>
+                    <td>
+                        {% if submission['file_path'] %}
+                        <a href="{{ url_for('download_file', filename=submission['file_path']|filename) }}"
+                            class="file-link">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="7 10 12 15 17 10" />
+                                <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                            Download
+                        </a>
+                        {% else %}
+                        <span class="text-muted">No file</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="time-text">{{ submission['created_at']|format_dt }}</span>
+                    </td>
+                    <td>
+                        <div style="display: flex; gap: 5px;">
+                            <a href="{{ url_for('edit_report', report_id=submission['id']) }}" class="btn btn-ghost"
+                                style="padding: 4px 8px; font-size: 0.8rem;">Edit</a>
+                            <button type="button" class="btn btn-ghost"
+                                style="padding: 4px 8px; font-size: 0.8rem; color: var(--error); border-color: var(--error);"
+                                data-delete-url="{{ url_for('delete_report', report_id=submission['id']) }}"
+                                onclick="showDeleteConfirm(this.dataset.deleteUrl, 'Delete Report')">Del</button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+            <polyline points="10 9 9 9 8 9" />
+        </svg>
+        <h3>No submissions yet</h3>
+        <p>Your submitted work reports will appear here</p>
+    </div>
+    {% endif %}
+</div>
+</div>
+
+<script id="my-streak-data" type="application/json">
+    {{ raw_streak | default([]) | tojson | safe }}
+</script>
+<script id="client-distribution-data" type="application/json">
+    {{ client_distribution | default([]) | tojson | safe }}
+</script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const gridEl = document.getElementById('calendar-grid');
+        const monthYearEl = document.getElementById('calendar-month-year');
+        const prevBtn = document.getElementById('prev-month');
+        const nextBtn = document.getElementById('next-month');
+
+        let currentDate = new Date();
+        let rawStreak = [];
+
+        try {
+            const streakDataEl = document.getElementById('my-streak-data');
+            if (streakDataEl) {
+                const parsed = JSON.parse(streakDataEl.textContent);
+                rawStreak = [];
+                for (let item of parsed) {
+                    if (!item || !item.work_date) continue;
+
+                    let s = String(item.work_date).split(' ')[0].replace(/\//g, '-');
+                    let p = s.split('-');
+                    let cleanYYYYMMDD = s;
+
+                    // Normalize to YYYY-MM-DD regardless of whether it's YYYY-MM-DD or DD-MM-YYYY
+                    if (p.length === 3) {
+                        if (p[0].length === 4) {
+                            cleanYYYYMMDD = `${p[0]}-${p[1].padStart(2, '0')}-${p[2].padStart(2, '0')}`;
+                        } else if (p[2].length === 4) {
+                            cleanYYYYMMDD = `${p[2]}-${p[1].padStart(2, '0')}-${p[0].padStart(2, '0')}`;
+                        }
+                    }
+
+                    // Push standardized data
+                    rawStreak.push({
+                        ...item,
+                        work_date: cleanYYYYMMDD,
+                        daily_qty: Number(item.daily_qty) || 0
+                    });
+                }
+            }
+        } catch (e) {
+            console.error('Error parsing streak data', e);
+        }
+
+        // Convert streak raw data into a Set of date strings "YYYY-MM-DD"
+        const activeDates = new Set();
+        rawStreak.forEach(item => {
+            if (item.daily_qty > 0) {
+                activeDates.add(item.work_date);
+            }
+        });
+
+        const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+        const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+        function renderCalendar(dateToRender) {
+            // Clear current grid
+            gridEl.innerHTML = '';
+
+            // Render day names header
+            dayNames.forEach(name => {
+                const el = document.createElement('div');
+                el.className = 'calendar-day-name';
+                el.textContent = name;
+                gridEl.appendChild(el);
+            });
+
+            const year = dateToRender.getFullYear();
+            const month = dateToRender.getMonth();
+
+            monthYearEl.textContent = `${monthNames[month]} ${year}`;
+
+            // Compute first day of the month (0=Sun, 6=Sat)
+            const firstDay = new Date(year, month, 1).getDay();
+            // Compute days in month
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+            // Render empty slots for preceding days
+            for (let i = 0; i < firstDay; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'calendar-cell';
+                const emptyDay = document.createElement('div');
+                emptyDay.className = 'calendar-day empty-cell';
+                cell.appendChild(emptyDay);
+                gridEl.appendChild(cell);
+            }
+
+            // Render actual days
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dayStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+                const cell = document.createElement('div');
+                cell.className = 'calendar-cell';
+
+                const dayEl = document.createElement('div');
+                dayEl.className = 'calendar-day';
+                dayEl.textContent = day;
+
+                if (activeDates.has(dayStr)) {
+                    dayEl.classList.add('active-streak');
+                    // Add a tiny tooltip for quantity if desired:
+                    const record = rawStreak.find(r => r.work_date === dayStr);
+                    if (record) dayEl.title = `Total Output: ${record.daily_qty}`;
+                }
+
+                cell.appendChild(dayEl);
+                gridEl.appendChild(cell);
+            }
+        }
+
+        renderCalendar(currentDate);
+
+        prevBtn.addEventListener('click', () => {
+            currentDate.setMonth(currentDate.getMonth() - 1);
+            renderCalendar(currentDate);
+        });
+
+        nextBtn.addEventListener('click', () => {
+            currentDate.setMonth(currentDate.getMonth() + 1);
+            renderCalendar(currentDate);
+        });
+
+        const shortMonthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        function getChartDateLabels(dates) {
+            return dates.map(dStr => {
+                if (!dStr) return 'Unknown';
+                const parts = dStr.split('-');
+                if (parts.length === 3 && parts[0].length === 4) {
+                    const monthIdx = parseInt(parts[1], 10) - 1;
+                    const dayNum = parseInt(parts[2], 10);
+                    if (monthIdx >= 0 && monthIdx < 12 && !isNaN(dayNum)) {
+                        return `${shortMonthNames[monthIdx]} ${dayNum}`; // Exactly "Feb 20"
+                    }
+                }
+                return dStr;
+            });
+        }
+
+        // -----------------------------------------
+        // Render Client Distribution Chart (Donut)
+        // -----------------------------------------
+        const clientCtx = document.getElementById('clientDistributionChart');
+        const clientDataEl = document.getElementById('client-distribution-data');
+
+        if (clientCtx && clientDataEl) {
+            let clientData = [];
+            try {
+                clientData = JSON.parse(clientDataEl.textContent);
+            } catch (e) {
+                console.error('Error parsing client distribution data', e);
+            }
+
+            if (clientData.length > 0) {
+                const labels = clientData.map(item => item.client_name || 'Others');
+                const values = clientData.map(item => item.total_qty);
+
+                // Generate unique colors based on index to avoid duplicates
+                const getColor = (index) => {
+                    const hue = (index * 137.5) % 360; // Golden angle distribution for unique hues
+                    return {
+                        bg: `hsla(${hue}, 75%, 75%, 0.7)`,
+                        border: `hsla(${hue}, 75%, 65%, 1)`
+                    };
+                };
+
+                const pieColors = labels.map((_, index) => getColor(index).bg);
+                const pieBorders = labels.map((_, index) => getColor(index).border);
+
+                new Chart(clientCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: values,
+                            backgroundColor: pieColors,
+                            borderColor: pieBorders,
+                            borderWidth: 2,
+                            hoverOffset: 15
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '65%',
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                                labels: {
+                                    usePointStyle: true,
+                                    padding: 20,
+                                    font: { size: 12, weight: '500', family: "'Outfit', sans-serif" }
+                                }
+                            },
+                            tooltip: {
+                                backgroundColor: 'rgba(17, 24, 39, 0.9)',
+                                padding: 12,
+                                cornerRadius: 8,
+                                callbacks: {
+                                    label: function (context) {
+                                        const label = context.label || '';
+                                        const value = context.parsed || 0;
+                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                        const percentage = ((value / total) * 100).toFixed(1);
+                                        return ` ${label}: ${value} units (${percentage}%)`;
+                                    }
+                                }
+                            }
+                        },
+                        animation: {
+                            duration: 1500,
+                            easing: 'easeOutQuart'
+                        }
+                    }
+                });
+            }
+        }
+    });
+</script>
+{% endblock %}

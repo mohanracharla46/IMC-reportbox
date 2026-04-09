@@ -1,0 +1,747 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - Work Report System{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <div class="header-content">
+            <h1 class="page-title">Admin Dashboard</h1>
+            <p class="page-subtitle">Manage employees and view all work reports</p>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon stat-icon-blue">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                </svg>
+            </div>
+            <div class="stat-content">
+                <div class="stat-label">Manage Staff</div>
+                <div style="display: flex; gap: 1rem;">
+                    <div>
+                        <div class="stat-value" style="font-size: 1.5rem;">{{ total_employees }}</div>
+                        <div style="font-size: 0.7rem; color: var(--gray-500); text-transform: uppercase;">Inhouse</div>
+                    </div>
+                    <div style="border-left: 1px solid var(--gray-200); padding-left: 1rem;">
+                        <div class="stat-value" style="font-size: 1.5rem;">{{ total_freelancers }}</div>
+                        <div style="font-size: 0.7rem; color: var(--gray-500); text-transform: uppercase;">Freelancers
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon stat-icon-green">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                </svg>
+            </div>
+            <div class="stat-content">
+                <div class="stat-label">Today's Submissions</div>
+                <div class="stat-value">{{ today_submissions }}</div>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon stat-icon-purple">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                </svg>
+            </div>
+            <div class="stat-content">
+                <div class="stat-label">Total Reports</div>
+                <div class="stat-value">{{ total_submissions }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('submissions', event)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+            </svg>
+            Work Submissions
+        </button>
+        <button class="tab-btn" onclick="switchTab('employees', event)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+            </svg>
+            Manage Employees
+        </button>
+        <button class="tab-btn" onclick="switchTab('freelancers', event)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M15 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            Manage Freelancers
+        </button>
+        <button class="tab-btn" onclick="switchTab('direct-submission', event)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+            Submit Work
+        </button>
+        <a href="{{ url_for('work_analysis') }}" class="tab-btn" style="text-decoration: none;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="7" height="7" rx="1" />
+                <rect x="14" y="3" width="7" height="7" rx="1" />
+                <rect x="3" y="14" width="7" height="7" rx="1" />
+                <rect x="14" y="14" width="7" height="7" rx="1" />
+            </svg>
+            Work Analysis
+        </a>
+        <a href="{{ url_for('client_statistics') }}" class="tab-btn" style="text-decoration: none;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="20" x2="18" y2="10" />
+                <line x1="12" y1="20" x2="12" y2="4" />
+                <line x1="6" y1="20" x2="6" y2="14" />
+            </svg>
+            Client Statistics
+        </a>
+        <a href="{{ url_for('manage_work_types') }}" class="tab-btn" style="text-decoration: none;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M6 3h12M6 8h12M6 13l8.5 8M6 13h3a5 5 0 0 1 5-5" />
+            </svg>
+            Manage Rates
+        </a>
+    </div>
+
+    <!-- Submissions Tab -->
+    <div id="submissions-tab" class="tab-content active">
+        <div class="card">
+            <div class="card-header">
+                <div class="header-info">
+                    <h2 class="card-title">All Work Submissions</h2>
+                    <p class="card-subtitle">View and filter employee work reports</p>
+                </div>
+                <div class="card-actions">
+                    <form method="GET" class="filter-form-inline">
+                        <button type="submit" form="filter-form-main" class="btn btn-primary">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <circle cx="11" cy="11" r="8" />
+                                <path d="m21 21-4.35-4.35" />
+                            </svg>
+                            Filter
+                        </button>
+                        {% set export_url = url_for('download_filtered_reports', employee=employee_filter,
+                        start_date=start_date, end_date=end_date, employment_type=employment_type_filter) %}
+                        <a href="{{ export_url }}" class="btn btn-ghost"
+                            style="color: var(--success); border-color: var(--success);">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="7 10 12 15 17 10" />
+                                <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                            Export Excel
+                        </a>
+                        <a href="{{ url_for('export_self_work') }}" class="btn btn-ghost"
+                            style="color: var(--primary); border-color: var(--primary);">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="7 10 12 15 17 10" />
+                                <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                            Export Self Work
+                        </a>
+                        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-ghost">Clear</a>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Filters -->
+            <form method="GET" id="filter-form-main" class="filter-form">
+                <div class="filter-grid">
+                    <div class="form-group">
+                        <label for="employee" class="form-label">Employee Name</label>
+                        <input type="text" id="employee" name="employee" class="form-input"
+                            placeholder="Search by name..." value="{{ employee_filter }}">
+                    </div>
+                    <div class="form-group">
+                        <label for="employment_type" class="form-label">Type</label>
+                        <select id="employment_type" name="employment_type" class="form-input"
+                            onchange="this.form.submit()">
+                            <option value="both" {% if employment_type_filter=='both' %}selected{% endif %}>Both
+                            </option>
+                            <option value="inhouse" {% if employment_type_filter=='inhouse' %}selected{% endif %}>
+                                Inhouse</option>
+                            <option value="freelancer" {% if employment_type_filter=='freelancer' %}selected{% endif %}>
+                                Freelancer</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="start_date" class="form-label">Start Date</label>
+                        <input type="date" id="start_date" name="start_date" class="form-input" value="{{ start_date }}"
+                            onchange="this.form.submit()">
+                    </div>
+                    <div class="form-group">
+                        <label for="end_date" class="form-label">End Date</label>
+                        <input type="date" id="end_date" name="end_date" class="form-input" value="{{ end_date }}"
+                            onchange="this.form.submit()">
+                    </div>
+                </div>
+            </form>
+
+            <!-- Submissions Table -->
+            {% if submissions %}
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Employee</th>
+                            <th>Type</th>
+                            <th>Date</th>
+                            <th>Client</th>
+                            <th>Work Type</th>
+                            <th>Qty</th>
+                            <th>Work Description</th>
+                            <th>Attachment</th>
+                            <th>Submitted At</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for submission in submissions %}
+                        <tr>
+                            <td>
+                                <div class="employee-cell">
+                                    <div class="employee-avatar">{{ (submission['display_name'] or 'A')[0] }}</div>
+                                    <div class="employee-info">
+                                        <div class="employee-name">{{ submission['display_name'] }}</div>
+                                        <div class="employee-email">{{ submission['employee_email'] }}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="employment-badge {{ submission['employment_type'] }}">{{
+                                    submission['employment_type']|title if submission['employment_type'] else 'Inhouse'
+                                    }}</span>
+                            </td>
+                            <td>
+                                <span class="date-badge">{{ submission['date'] }}</span>
+                            </td>
+                            <td>
+                                <span class="client-name">{{ submission['client_name'] or 'N/A' }}</span>
+                            </td>
+                            <td>
+                                <span class="work-type-badge">{{ submission['work_type'] or 'N/A' }}</span>
+                            </td>
+                            <td>
+                                <span class="quantity-badge">{{ submission['quantity'] or 1 }}</span>
+                            </td>
+                            <td>
+                                <div class="work-text">{{ submission['work_text'][:60] }}{% if
+                                    submission['work_text']|length > 60 %}...{% endif %}</div>
+                            </td>
+                            <td>
+                                {% if submission['file_path'] %}
+                                <a href="{{ url_for('download_file', filename=submission['file_path']|filename) }}"
+                                    class="file-link">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                        <polyline points="7 10 12 15 17 10" />
+                                        <line x1="12" y1="15" x2="12" y2="3" />
+                                    </svg>
+                                    Download
+                                </a>
+                                {% else %}
+                                <span class="text-muted">No file</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="time-text">{{ submission['created_at']|format_dt }}</span>
+                            </td>
+                            <td>
+                                <div style="display: flex; gap: 5px;">
+                                    <a href="{{ url_for('edit_report', report_id=submission['id']) }}"
+                                        class="btn btn-ghost" style="padding: 4px 8px; font-size: 0.8rem;">Edit</a>
+                                    <button type="button" class="btn btn-ghost"
+                                        style="padding: 4px 8px; font-size: 0.8rem; color: var(--error); border-color: var(--error);"
+                                        data-delete-url="{{ url_for('delete_report', report_id=submission['id']) }}"
+                                        onclick="showDeleteConfirm(this.dataset.deleteUrl, 'Delete Report')">Del</button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="m21 21-4.35-4.35" />
+                </svg>
+                <h3>No submissions found</h3>
+                <p>No work reports match your current filters</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Employees Tab (Inhouse) -->
+    <div id="employees-tab" class="tab-content">
+        <div class="card">
+            <div class="card-header">
+                <div class="header-info">
+                    <h2 class="card-title">Inhouse Employee Management</h2>
+                    <p class="card-subtitle">Manage your in-house staff</p>
+                </div>
+                <div class="card-actions">
+                    <button class="btn btn-primary btn-full-mobile" onclick="showAddEmployeeModal()">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19" />
+                            <line x1="5" y1="12" x2="19" y2="12" />
+                        </svg>
+                        Add Employee
+                    </button>
+                </div>
+            </div>
+
+            {% if employees %}
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Employee</th>
+                            <th>Email</th>
+                            <th>Type</th>
+                            <th>Monthly Earnings</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for employee in employees %}
+                        <tr>
+                            <td>
+                                <div class="employee-cell">
+                                    <div class="employee-avatar">{{ employee['name'][0] }}</div>
+                                    <div class="employee-info">
+                                        <div class="employee-name">{{ employee['name'] }}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>{{ employee['email'] }}</td>
+                            <td>
+                                <span class="employment-badge {{ employee['employment_type'] }}">{{
+                                    employee['employment_type']|title if employee['employment_type'] else 'Inhouse'
+                                    }}</span>
+                            </td>
+                            <td>
+                                <span class="quantity-badge"
+                                    style="background: var(--success-bg); color: var(--success); font-weight: 600;">
+                                    ₹{{ employee['monthly_amount'] }}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="action-buttons">
+                                    <a href="{{ url_for('view_employee_reports', employee_id=employee['id']) }}"
+                                        class="btn btn-sm btn-primary">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
+                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                            <polyline points="14 2 14 8 20 8" />
+                                        </svg>
+                                        Reports
+                                    </a>
+                                    <button class="btn btn-sm btn-ghost edit-employee-btn"
+                                        data-id="{{ employee['id'] }}" data-name="{{ employee['name'] }}"
+                                        data-email="{{ employee['email'] }}"
+                                        data-type="{{ employee['employment_type'] or 'inhouse' }}">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
+                                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                        </svg>
+                                        Edit
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-danger"
+                                        data-delete-url="{{ url_for('delete_employee', employee_id=employee['id']) }}"
+                                        onclick="showDeleteConfirm(this.dataset.deleteUrl, 'Delete Employee', 'Are you sure you want to delete this employee? This will also remove all their associated reports.')">Del</button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                </svg>
+                <h3>No inhouse employees</h3>
+                <p>Add your first employee to get started</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Freelancers Tab -->
+    <div id="freelancers-tab" class="tab-content">
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Freelancer Management</h2>
+                <button class="btn btn-primary" onclick="showAddEmployeeModal()">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    Add Freelancer
+                </button>
+            </div>
+
+            {% if freelancers %}
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Freelancer</th>
+                            <th>Email</th>
+                            <th>Type</th>
+                            <th>Monthly Earnings</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for freelancer in freelancers %}
+                        <tr>
+                            <td>
+                                <div class="employee-cell">
+                                    <div class="employee-avatar">{{ freelancer['name'][0] }}</div>
+                                    <div class="employee-name">{{ freelancer['name'] }}</div>
+                                </div>
+                            </td>
+                            <td>{{ freelancer['email'] }}</td>
+                            <td>
+                                <span class="employment-badge {{ freelancer['employment_type'] }}">{{
+                                    freelancer['employment_type']|title if freelancer['employment_type'] else
+                                    'Freelancer'
+                                    }}</span>
+                            </td>
+                            <td>
+                                <span class="quantity-badge"
+                                    style="background: var(--success-bg); color: var(--success); font-weight: 600;">
+                                    ₹{{ freelancer['monthly_amount'] }}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="action-buttons">
+                                    <a href="{{ url_for('view_employee_reports', employee_id=freelancer['id']) }}"
+                                        class="btn btn-sm btn-primary">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
+                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                            <polyline points="14 2 14 8 20 8" />
+                                        </svg>
+                                        Reports
+                                    </a>
+                                    <button class="btn btn-sm btn-ghost edit-employee-btn"
+                                        data-id="{{ freelancer['id'] }}" data-name="{{ freelancer['name'] }}"
+                                        data-email="{{ freelancer['email'] }}"
+                                        data-type="{{ freelancer['employment_type'] or 'freelancer' }}">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
+                                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                        </svg>
+                                        Edit
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-danger"
+                                        data-delete-url="{{ url_for('delete_employee', employee_id=freelancer['id']) }}"
+                                        onclick="showDeleteConfirm(this.dataset.deleteUrl, 'Delete Freelancer', 'Are you sure you want to delete this freelancer? This will also remove all their associated reports.')">Del</button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                </svg>
+                <h3>No freelancers</h3>
+                <p>Add your first freelancer to get started</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Direct Submission Tab -->
+    <div id="direct-submission-tab" class="tab-content">
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Submit Self Work Report</h2>
+                <p class="card-subtitle">Track your own daily work directly</p>
+                <div class="card-actions">
+                    <a href="{{ url_for('export_self_work') }}" class="btn btn-ghost"
+                        style="color: var(--primary); border-color: var(--primary);">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                        Export Self Work
+                    </a>
+                </div>
+            </div>
+            <form id="admin-report-form" method="POST" action="{{ url_for('admin_submit_report') }}"
+                enctype="multipart/form-data" class="report-form" style="padding: var(--spacing-xl);">
+
+                <!-- Employee Name Field (Self-Identification) -->
+                <div class="form-grid"
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
+                    <div class="form-group">
+                        <label for="admin_employee_name" class="form-label">Employee Name <span
+                                style="color: var(--error);">*</span></label>
+                        <select id="admin_employee_name" name="employee_name" class="form-input" required
+                            onchange="toggleOtherEmployeeName(this.value)">
+                            <option value="" disabled>Select employee or freelancer...</option>
+                            {% if employees %}
+                            <optgroup label="-> Inhouse">
+                                {% for emp in employees %}
+                                <option value="{{ emp['name'] }}" {% if emp['name']==session['user_name'] %}selected{%
+                                    endif %}>{{ emp['name'] }}</option>
+                                {% endfor %}
+                            </optgroup>
+                            {% endif %}
+                            {% if freelancers %}
+                            <optgroup label="-> Freelancers">
+                                {% for fl in freelancers %}
+
+                                <option value="{{ fl['name'] }}">{{ fl['name'] }}</option>
+                                {% endfor %}
+                            </optgroup>
+                            {% endif %}
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="admin_submission_date" class="form-label">Submission Date <span
+                                style="color: var(--error);">*</span></label>
+                        <input type="date" id="admin_submission_date" name="submission_date" class="form-input"
+                            value="{{ now.strftime('%Y-%m-%d') }}" max="{{ now.strftime('%Y-%m-%d') }}" required>
+                    </div>
+                </div>
+
+                <!-- Other Employee Name (shown when 'Other' is selected) -->
+                <div id="admin_other_employee_group" class="form-group" style="display: none; margin-bottom: 1.5rem;">
+                    <label for="admin_other_employee_name" class="form-label">Enter Name Manually <span
+                            style="color: var(--error);">*</span></label>
+                    <input type="text" id="admin_other_employee_name" name="other_employee_name" class="form-input"
+                        placeholder="Type the employee/freelancer name...">
+                </div>
+
+                <!-- Client Category & Name -->
+                <div class="form-grid"
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
+                    <div class="form-group">
+                        <label for="admin_client_category" class="form-label">Client Category <span
+                                style="color: var(--error);">*</span></label>
+                        <select id="admin_client_category" name="client_category" class="form-input" required>
+                            <option value="" disabled selected>Select category</option>
+                            <option value="Political">Political</option>
+                            <option value="Corporate">Corporate</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="admin_client_name" class="form-label">Client Name <span
+                                style="color: var(--error);">*</span></label>
+                        <select id="admin_client_name" name="client_name" class="form-input" required>
+                            <option value="" disabled selected>Select client category first</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="admin_other_client_group" class="form-group" style="display: none; margin-bottom: 1.5rem;">
+                    <label for="admin_other_client_name" class="form-label">Other Client Name <span
+                            style="color: var(--error);">*</span></label>
+                    <input type="text" id="admin_other_client_name" name="other_client_name" class="form-input"
+                        placeholder="Enter client name manually...">
+                </div>
+
+                <!-- Work Type -->
+                <div class="form-group" style="margin-bottom: 1.5rem;">
+                    <label for="admin_work_type" class="form-label">Work Type <span
+                            style="color: var(--error);">*</span></label>
+                    <select id="admin_work_type" name="work_type" class="form-input" required>
+                        <option value="" disabled selected>Select category first</option>
+                    </select>
+                </div>
+
+                <div id="admin_other_work_type_group" class="form-group" style="display: none; margin-bottom: 1.5rem;">
+                    <label for="admin_other_work_type_name" class="form-label">Other Work Type <span
+                            style="color: var(--error);">*</span></label>
+                    <input type="text" id="admin_other_work_type_name" name="other_work_type_name" class="form-input"
+                        placeholder="Enter work type manually...">
+                </div>
+
+                <!-- Quantity & Attachment -->
+                <div class="form-grid"
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
+                    <div class="form-group">
+                        <label for="admin_quantity" class="form-label">Quantity / Count <span
+                                style="color: var(--error);">*</span></label>
+                        <input type="number" id="admin_quantity" name="quantity" class="form-input" value="1" min="1"
+                            required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="admin_file" class="form-label">Attachment (Optional)</label>
+                        <div class="file-upload">
+                            <input type="file" id="admin_file" name="file" class="file-input"
+                                accept=".txt,.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif">
+                            <label for="admin_file" class="file-label" style="height: 42px;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="17 8 12 3 7 8" />
+                                    <line x1="12" y1="3" x2="12" y2="15" />
+                                </svg>
+                                <span class="file-text">Choose file</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Work Description -->
+                <div class="form-group" style="margin-bottom: 1.5rem;">
+                    <label for="admin_work_text" class="form-label">Work Description <span
+                            style="color: var(--error);">*</span></label>
+                    <textarea id="admin_work_text" name="work_text" class="form-textarea" rows="4"
+                        placeholder="Describe the work..." required></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-full-mobile">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                        <polyline points="17 21 17 13 7 13 7 21" />
+                        <polyline points="7 3 7 8 15 8" />
+                    </svg>
+                    Submit Report
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+<!-- Add Employee Modal -->
+<div id="addEmployeeModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title">Add New Employee</h3>
+            <button class="modal-close" onclick="closeModal('addEmployeeModal')">&times;</button>
+        </div>
+        <form method="POST" action="{{ url_for('add_employee') }}">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="add_name" class="form-label">Full Name</label>
+                    <input type="text" id="add_name" name="name" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label for="add_email" class="form-label">Email Address</label>
+                    <input type="email" id="add_email" name="email" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label for="add_password" class="form-label">Password</label>
+                    <input type="password" id="add_password" name="password" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label for="add_employment_type" class="form-label">Employment Type</label>
+                    <select id="add_employment_type" name="employment_type" class="form-input" required>
+                        <option value="inhouse">In-house Employee</option>
+                        <option value="freelancer">Freelancer</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost" onclick="closeModal('addEmployeeModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Add Employee</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Employee Modal -->
+<div id="editEmployeeModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title">Edit Employee</h3>
+            <button class="modal-close" onclick="closeModal('editEmployeeModal')">&times;</button>
+        </div>
+        <form method="POST" id="editEmployeeForm">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="edit_name" class="form-label">Full Name</label>
+                    <input type="text" id="edit_name" name="name" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit_email" class="form-label">Email Address</label>
+                    <input type="email" id="edit_email" name="email" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit_password" class="form-label">Password (leave blank to keep current)</label>
+                    <input type="password" id="edit_password" name="password" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label for="edit_employment_type" class="form-label">Employment Type</label>
+                    <select id="edit_employment_type" name="employment_type" class="form-input" required>
+                        <option value="inhouse">In-house Employee</option>
+                        <option value="freelancer">Freelancer</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost" onclick="closeModal('editEmployeeModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Update Employee</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+    function toggleOtherEmployeeName(value) {
+        const group = document.getElementById('admin_other_employee_group');
+        const input = document.getElementById('admin_other_employee_name');
+        if (value === 'Other') {
+            group.style.display = 'block';
+            input.required = true;
+            input.focus();
+        } else {
+            group.style.display = 'none';
+            input.required = false;
+            input.value = '';
+        }
+    }
+</script>
+{% endblock %}
