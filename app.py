@@ -892,21 +892,34 @@ def delete_work_type(type_id):
 
 @app.route('/api/work-types')
 def get_work_types_api():
-    """API endpoint to get work types by category"""
-    conn = get_db_connection()
-    rows = execute_query(conn, 'SELECT name, category FROM work_types').fetchall()
-    conn.close()
-    
-    result = {'Political': [], 'Corporate': []}
-    for row in rows:
-        cat = row['category']
-        if cat in result:
-            result[cat].append(row['name'])
-        else:
-            result[cat] = [row['name']]
-    
-    from flask import jsonify
-    return jsonify(result)
+    """API endpoint to get work types by category with robust error handling"""
+    conn = None
+    try:
+        conn = get_db_connection()
+        rows = execute_query(conn, 'SELECT name, category FROM work_types').fetchall()
+        
+        result = {'Political': [], 'Corporate': []}
+        for row in rows:
+            try:
+                r_dict = dict(row)
+                cat = r_dict.get('category')
+                name = r_dict.get('name')
+                if cat and name:
+                    if cat not in result:
+                        result[cat] = []
+                    result[cat].append(name)
+            except Exception as row_err:
+                print(f"Error processing work type row: {row_err}")
+                continue
+        
+        return jsonify(result)
+    except Exception as e:
+        print(f"API Error in /api/work-types: {str(e)}")
+        # Return empty but valid structure to prevent JS crashes
+        return jsonify({'Political': [], 'Corporate': [], 'error': str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
 
 @app.route('/admin/employee/add', methods=['POST'])
 @admin_required
@@ -1649,21 +1662,50 @@ def delete_client(client_id):
 
 @app.route('/api/clients')
 def get_clients_api():
-    """API to get current standard clients list"""
-    conn = get_db_connection()
-    clients = execute_query(conn, "SELECT name, category FROM clients ORDER BY name").fetchall()
-    conn.close()
-    
-    # Categorize results
-    results = {'Political': [], 'Corporate': []}
-    for c in clients:
-        cat = c['category'] if c['category'] in ['Political', 'Corporate'] else 'Corporate'
-        results[cat].append(c['name'])
-    
-    # Ensure "Other/Others" is at the end
-    results['Political'].append('Others')
-    results['Corporate'].append('Other')
-    return jsonify(results)
+    """API to get current standard clients list with error handling"""
+    conn = None
+    try:
+        conn = get_db_connection()
+        # Migration: Ensure category column exists (case-sensitive for postgres compatibility)
+        try:
+            execute_query(conn, "SELECT category FROM clients LIMIT 1")
+        except:
+            # Add category column if it's missing
+            print("Adding missing 'category' column to clients table")
+            _, q = get_db_info()
+            if q == '%s':
+                execute_query(conn, "ALTER TABLE clients ADD COLUMN category TEXT DEFAULT 'Corporate'")
+            else:
+                execute_query(conn, "ALTER TABLE clients ADD COLUMN category TEXT DEFAULT 'Corporate'")
+            conn.commit()
+
+        clients = execute_query(conn, "SELECT name, category FROM clients ORDER BY name").fetchall()
+        
+        # Categorize results
+        results = {'Political': [], 'Corporate': []}
+        for c in clients:
+            try:
+                # Handle both sqlite3.Row and RealDictCursor
+                c_dict = dict(c)
+                cat = c_dict.get('category', 'Corporate')
+                if cat not in ['Political', 'Corporate']:
+                    cat = 'Corporate'
+                results[cat].append(c_dict.get('name', 'Unknown'))
+            except Exception as row_err:
+                print(f"Error processing client row: {row_err}")
+                continue
+        
+        # Ensure "Other/Others" is at the end
+        if 'Others' not in results['Political']: results['Political'].append('Others')
+        if 'Other' not in results['Corporate']: results['Corporate'].append('Other')
+        
+        return jsonify(results)
+    except Exception as e:
+        print(f"API Error in /api/clients: {str(e)}")
+        return jsonify({'error': str(e), 'Political': ['Others'], 'Corporate': ['Other']}), 500
+    finally:
+        if conn:
+            conn.close()
 
 if __name__ == '__main__':
     from os import makedirs, getenv
