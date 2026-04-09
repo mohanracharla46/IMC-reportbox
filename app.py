@@ -917,7 +917,11 @@ def get_work_types_api():
                 print(f"Error processing work type row: {row_err}")
                 continue
         
-        return jsonify(result)
+        response = jsonify(result)
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
     except Exception as e:
         print(f"API Error in /api/work-types: {str(e)}")
         # Return empty but valid structure to prevent JS crashes
@@ -1759,7 +1763,11 @@ def get_clients_api():
         if 'Others' not in results['Political']: results['Political'].append('Others')
         if 'Other' not in results['Corporate']: results['Corporate'].append('Other')
         
-        return jsonify(results)
+        response = jsonify(results)
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
     except Exception as e:
         print(f"API Error in /api/clients: {str(e)}")
         return jsonify({'error': str(e), 'Political': ['Others'], 'Corporate': ['Other']}), 500
