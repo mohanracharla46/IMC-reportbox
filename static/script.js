@@ -19,6 +19,14 @@ document.addEventListener('DOMContentLoaded', function () {
     // Initialize scroll reveal
     initializeScrollReveal();
 
+    // Safety fallback for scroll reveal
+    setTimeout(() => {
+        document.querySelectorAll('.reveal-on-scroll:not(.revealed)').forEach(el => {
+            console.log('Safety reveal for:', el);
+            el.classList.add('revealed');
+        });
+    }, 2000);
+
     // Initialize button ripples
     initializeButtonRipples();
 

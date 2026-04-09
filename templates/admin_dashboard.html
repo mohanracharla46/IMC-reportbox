@@ -10,6 +10,11 @@
             <p class="page-subtitle">Manage employees and view all work reports</p>
         </div>
     </div>
+    
+    <script>
+        console.log("Admin Dashboard Initialized");
+        console.log("Submissions count:", {{ submissions|length if submissions else 0 }});
+    </script>
 
     <!-- Statistics Cards -->
     <div class="stats-grid">
