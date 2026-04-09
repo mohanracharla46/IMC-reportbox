@@ -1564,7 +1564,8 @@ def export_work_analysis():
     conn = None
     try:
         conn = get_db_connection()
-        query, params, _, _, _, _ = get_filtered_work_analysis_query_and_params(request.args)
+        # Correctly unpack all 7 values from the helper function
+        query, params, _, _, _, _, _ = get_filtered_work_analysis_query_and_params(request.args)
         query_with_order = query + ' ORDER BY s.date DESC, empname ASC'
         records = [dict(r) for r in execute_query(conn, query_with_order, params).fetchall()]
         
