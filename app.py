@@ -1559,38 +1559,92 @@ def work_analysis():
 @app.route('/admin/work-analysis/export')
 @admin_required
 def export_work_analysis():
-    """Export filtered work analysis data to Excel"""
+    """Export filtered work analysis data to Excel with error handling"""
     from flask import make_response
-    conn = get_db_connection()
-    query, params, _, _, _, _ = get_filtered_work_analysis_query_and_params(request.args)
-    query_with_order = query + ' ORDER BY s.date DESC, empname ASC'
-    records = [dict(r) for r in execute_query(conn, query_with_order, params).fetchall()]
-    conn.close()
-    if not records:
-        flash('No data found to export with these filters.', 'info')
+    conn = None
+    try:
+        conn = get_db_connection()
+        query, params, _, _, _, _ = get_filtered_work_analysis_query_and_params(request.args)
+        query_with_order = query + ' ORDER BY s.date DESC, empname ASC'
+        records = [dict(r) for r in execute_query(conn, query_with_order, params).fetchall()]
+        
+        if not records:
+            flash('No data found to export with these filters.', 'info')
+            return redirect(url_for('work_analysis', **request.args))
+        
+        data = []
+        total_qty = 0
+        total_price = 0
+        
+        for r in records:
+            # Handle potential None for employment_type
+            emp_type_raw = r.get('employment_type')
+            emp_type_display = emp_type_raw.title() if emp_type_raw else 'Inhouse'
+            
+            price = calculate_submission_amount(r.get('worktype'), r.get('quantity'), emp_type_raw)
+            data.append({
+                'Date': r.get('date'), 
+                'Employee Name': r.get('empname'), 
+                'Employment Type': emp_type_display, 
+                'Client': r.get('client') or '—', 
+                'Work Type': r.get('worktype') or '—', 
+                'Quantity': r.get('quantity') or 0, 
+                'Price (₹)': price, 
+                'Description': r.get('description') or ''
+            })
+            total_qty += int(r.get('quantity') or 0)
+            total_price += price
+            
+        df = pd.DataFrame(data)
+        output = BytesIO()
+        
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Work Analysis')
+            worksheet = writer.sheets['Work Analysis']
+            
+            last_row = len(df) + 2
+            worksheet.cell(row=last_row, column=1, value="GRAND TOTAL")
+            worksheet.cell(row=last_row, column=6, value=total_qty)
+            worksheet.cell(row=last_row, column=7, value=total_price)
+            
+            from openpyxl.styles import Font, Alignment, PatternFill
+            bold_font = Font(bold=True)
+            center_align = Alignment(horizontal='center')
+            header_font = Font(bold=True, color="FFFFFF")
+            header_fill = PatternFill(start_color="1F2937", end_color="1F2937", fill_type="solid")
+            
+            # Format header
+            for cell in worksheet[1]:
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = center_align
+                
+            # Highlight totals
+            for col in range(1, 9):
+                cell = worksheet.cell(row=last_row, column=col)
+                cell.font = bold_font
+                if col in [6, 7]:
+                    cell.fill = PatternFill(start_color="FDE68A", end_color="FDE68A", fill_type="solid")
+            
+            # Auto-adjust column widths
+            for i, col in enumerate(df.columns):
+                column_len = max(df[col].astype(str).map(len).max(), len(str(col))) + 2
+                col_letter = chr(65 + i)
+                worksheet.column_dimensions[col_letter].width = min(column_len, 60)
+                
+        output.seek(0)
+        response = make_response(output.getvalue())
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        response.headers["Content-Disposition"] = f"attachment; filename=Work_Analysis_{timestamp}.xlsx"
+        response.headers["Content-Type"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        return response
+    except Exception as e:
+        print(f"Excel Export Error: {e}")
+        flash(f"Error generating Excel file: {str(e)}", "error")
         return redirect(url_for('work_analysis', **request.args))
-    data = []; total_qty = 0; total_price = 0
-    for r in records:
-        price = calculate_submission_amount(r['worktype'], r['quantity'], r['employment_type'])
-        data.append({'Date': r['date'], 'Employee Name': r['empname'], 'Employment Type': r['employment_type'].title(), 'Client': r['client'] or '—', 'Work Type': r['worktype'] or '—', 'Quantity': r['quantity'], 'Price (₹)': price, 'Description': r['description']})
-        total_qty += int(r['quantity'] or 0); total_price += price
-    df = pd.DataFrame(data); output = BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Work Analysis'); worksheet = writer.sheets['Work Analysis']
-        last_row = len(df) + 2; worksheet.cell(row=last_row, column=1, value="GRAND TOTAL"); worksheet.cell(row=last_row, column=6, value=total_qty); worksheet.cell(row=last_row, column=7, value=total_price)
-        from openpyxl.styles import Font, Alignment, PatternFill
-        bold_font = Font(bold=True); center_align = Alignment(horizontal='center'); header_font = Font(bold=True, color="FFFFFF"); header_fill = PatternFill(start_color="1F2937", end_color="1F2937", fill_type="solid")
-        for cell in worksheet[1]: cell.font = header_font; cell.fill = header_fill; cell.alignment = center_align
-        for col in range(1, 9):
-            cell = worksheet.cell(row=last_row, column=col); cell.font = bold_font
-            if col in [6, 7]: cell.fill = PatternFill(start_color="FDE68A", end_color="FDE68A", fill_type="solid")
-        for i, col in enumerate(df.columns):
-            column_len = max(df[col].astype(str).map(len).max(), len(str(col))) + 2
-            worksheet.column_dimensions[chr(65 + i)].width = min(column_len, 60)
-    output.seek(0); response = make_response(output.getvalue()); timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    response.headers["Content-Disposition"] = f"attachment; filename=Work_Analysis_{timestamp}.xlsx"
-    response.headers["Content-Type"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    return response
+    finally:
+        if conn:
+            conn.close()
 
 @app.route('/admin/client-statistics')
 @admin_required
