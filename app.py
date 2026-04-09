@@ -664,22 +664,27 @@ def admin_dashboard():
     
     conn.close()
     
-    return render_template(
-        'admin_dashboard.html',
-        submissions=submissions,
-        employees=employees_with_amounts,
-        freelancers=freelancers_with_amounts,
-        total_submissions=total_submissions,
-        total_employees=len(employees_with_amounts),
-        total_freelancers=len(freelancers),
-        today_submissions=today_submissions,
-        employee_filter=employee_filter,
-        start_date=start_date,
-        end_date=end_date,
-        employment_type_filter=employment_type_filter,
-        all_clients=all_clients,
-        now=datetime.now()
-    )
+    try:
+        return render_template(
+            'admin_dashboard.html',
+            submissions=submissions,
+            employees=employees_with_amounts,
+            freelancers=freelancers_with_amounts,
+            total_submissions=total_submissions,
+            total_employees=len(employees_with_amounts),
+            total_freelancers=len(freelancers),
+            today_submissions=today_submissions,
+            employee_filter=employee_filter,
+            start_date=start_date,
+            end_date=end_date,
+            employment_type_filter=employment_type_filter,
+            all_clients=all_clients,
+            now=datetime.now()
+        )
+    except Exception as e:
+        print(f"Error rendering admin dashboard: {e}")
+        flash(f"Error loading dashboard: {str(e)}", "error")
+        return redirect(url_for('index'))
 
 @app.route('/admin/submit', methods=['POST'])
 @admin_required
