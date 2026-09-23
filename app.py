@@ -3,7 +3,7 @@ Work Report Management System
 A Flask-based application for managing daily employee work reports
 """
 
-from flask import Flask, render_template, request, redirect, url_for, flash, session, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, flash, session, send_from_directory, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from functools import wraps
@@ -60,6 +60,26 @@ def clear_rates_cache():
     """Clear the rates cache when changes are made"""
     global _rates_cache
     _rates_cache = None
+
+def ensure_client_exists(conn, client_name, category='Corporate'):
+    """Ensure client_name exists in the clients table so it displays in dropdowns"""
+    if not client_name or client_name.strip() in ['Other', 'Others', 'N/A', '']:
+        return
+    name_clean = client_name.strip()
+    try:
+        existing = execute_query(conn, 'SELECT id FROM clients WHERE LOWER(name) = LOWER(?)', (name_clean,)).fetchone()
+        if not existing:
+            cat = category.strip() if category and category.strip() in ['Political', 'Corporate'] else 'Corporate'
+            db_url, q = get_db_info()
+            if q == '%s':
+                cursor = conn.cursor()
+                cursor.execute('INSERT INTO clients (name, category) VALUES (%s, %s)', (name_clean, cat))
+            else:
+                cursor = conn.cursor()
+                cursor.execute('INSERT INTO clients (name, category) VALUES (?, ?)', (name_clean, cat))
+                conn.commit()
+    except Exception as e:
+        print(f"Error ensuring client exists: {e}")
 
 def calculate_submission_amount(work_type, quantity, employment_type):
     """Calculate amount based on work type for both inhouse and freelancers"""
@@ -119,9 +139,166 @@ def get_filename_filter(file_path):
         return ""
     return os.path.basename(file_path)
 
+def format_time_12h(value):
+    """Format datetime string or object to 12-hour format e.g. 09:15 AM"""
+    if not value:
+        return "--:--"
+    if isinstance(value, str):
+        try:
+            val = value.split('.')[0]
+            dt = datetime.strptime(val, "%Y-%m-%d %H:%M:%S")
+            return dt.strftime("%I:%M %p")
+        except:
+            try:
+                dt = datetime.strptime(value[:19], "%Y-%m-%dT%H:%M:%S")
+                return dt.strftime("%I:%M %p")
+            except:
+                return value
+    if hasattr(value, 'strftime'):
+        return value.strftime("%I:%M %p")
+    return str(value)
+
+def format_attendance_duration(login_time, logout_time=None):
+    """
+    Calculate duration between login_time and logout_time (or current time if logout_time is None).
+    Returns string like '7 hrs 30 mins' or '8 hrs' or '0 mins', and float total_hours.
+    """
+    if not login_time:
+        return "0 hrs", 0.0
+    
+    if isinstance(login_time, str):
+        try:
+            val = login_time.split('.')[0]
+            login_dt = datetime.strptime(val, "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            try:
+                login_dt = datetime.strptime(login_time[:19], "%Y-%m-%dT%H:%M:%S")
+            except Exception:
+                return "0 hrs", 0.0
+    else:
+        login_dt = login_time
+
+    if logout_time:
+        if isinstance(logout_time, str):
+            try:
+                val = logout_time.split('.')[0]
+                logout_dt = datetime.strptime(val, "%Y-%m-%d %H:%M:%S")
+            except Exception:
+                try:
+                    logout_dt = datetime.strptime(logout_time[:19], "%Y-%m-%dT%H:%M:%S")
+                except Exception:
+                    logout_dt = datetime.now()
+        else:
+            logout_dt = logout_time
+    else:
+        logout_dt = datetime.now()
+
+    if logout_dt < login_dt:
+        logout_dt = login_dt
+
+    diff = logout_dt - login_dt
+    total_seconds = int(diff.total_seconds())
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    
+    raw_hours = round(total_seconds / 3600.0, 2)
+    
+    if hours > 0 and minutes > 0:
+        duration_str = f"{hours} hrs {minutes} mins"
+    elif hours > 0:
+        duration_str = f"{hours} hrs"
+    elif minutes > 0:
+        duration_str = f"{minutes} mins"
+    else:
+        duration_str = "< 1 min"
+        
+    return duration_str, raw_hours
+
+def merge_attendance_with_leaves(conn, attendance_logs, user_id=None, limit=150):
+    """
+    Cross-reference attendance logs with approved leaves.
+    Updates existing attendance records on approved leave dates with status 'On Leave (Leave Type)'
+    and inserts entries for approved leave days where the user didn't log in.
+    """
+    query = '''
+        SELECT l.*, u.name as user_name, u.email as user_email
+        FROM leaves l
+        JOIN users u ON l.user_id = u.id
+        WHERE l.status = 'Approved' AND u.role != 'admin'
+    '''
+    params = []
+    if user_id:
+        query += ' AND l.user_id = ?'
+        params.append(user_id)
+        
+    approved_leaves = [dict(row) for row in execute_query(conn, query, params).fetchall()]
+    
+    from datetime import timedelta, datetime
+    leave_map = {}
+    for l in approved_leaves:
+        try:
+            d1 = datetime.strptime(str(l['start_date'])[:10], '%Y-%m-%d').date()
+            d2 = datetime.strptime(str(l['end_date'])[:10], '%Y-%m-%d').date()
+            curr = d1
+            while curr <= d2:
+                curr_str = curr.isoformat()
+                leave_map[(l['user_id'], curr_str)] = {
+                    'leave_type': l['leave_type'],
+                    'user_name': l.get('user_name', ''),
+                    'user_email': l.get('user_email', ''),
+                    'reason': l.get('reason', '')
+                }
+                curr += timedelta(days=1)
+        except Exception as e:
+            print(f"Error expanding leave dates: {e}")
+            
+    existing_keys = set()
+    merged = []
+    
+    for row in attendance_logs:
+        r = dict(row)
+        uid = r.get('user_id')
+        dt = str(r.get('date'))[:10]
+        existing_keys.add((uid, dt))
+        
+        if (uid, dt) in leave_map:
+            l_info = leave_map[(uid, dt)]
+            r['status'] = f"On Leave ({l_info['leave_type']})"
+            r['is_leave'] = True
+            r['leave_type'] = l_info['leave_type']
+            r['formatted_duration'] = 'On Leave'
+        else:
+            r['is_leave'] = False
+        merged.append(r)
+        
+    # Synthesize records for approved leave days without an attendance login
+    for (uid, dt), l_info in leave_map.items():
+        if (uid, dt) not in existing_keys:
+            merged.append({
+                'id': f"leave_{uid}_{dt}",
+                'user_id': uid,
+                'user_name': l_info['user_name'],
+                'user_email': l_info['user_email'],
+                'date': dt,
+                'login_time': None,
+                'logout_time': None,
+                'login_location': 'On Leave',
+                'logout_location': 'On Leave',
+                'total_hours': 0,
+                'formatted_duration': 'On Leave',
+                'status': f"On Leave ({l_info['leave_type']})",
+                'is_leave': True,
+                'leave_type': l_info['leave_type']
+            })
+            
+    # Sort descending by date
+    merged.sort(key=lambda x: str(x['date']), reverse=True)
+    return merged[:limit]
+
 app.jinja_env.globals.update(calculate_submission_amount=calculate_submission_amount)
 app.jinja_env.filters['format_dt'] = format_datetime_filter
 app.jinja_env.filters['filename'] = get_filename_filter
+app.jinja_env.filters['format_time_12h'] = format_time_12h
 
 # Database helper
 def format_streak_dates(raw_data):
@@ -195,6 +372,38 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )
     ''')
+
+    # Create attendance table
+    cursor.execute(f'''
+        CREATE TABLE IF NOT EXISTS attendance (
+            id {id_type},
+            user_id INTEGER NOT NULL,
+            date DATE NOT NULL,
+            login_time TIMESTAMP NOT NULL,
+            logout_time TIMESTAMP,
+            login_location TEXT,
+            logout_location TEXT,
+            total_hours REAL DEFAULT 0,
+            status TEXT DEFAULT 'Active',
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    ''')
+    
+    # Create leaves table
+    cursor.execute(f'''
+        CREATE TABLE IF NOT EXISTS leaves (
+            id {id_type},
+            user_id INTEGER NOT NULL,
+            leave_type TEXT NOT NULL,
+            start_date DATE NOT NULL,
+            end_date DATE NOT NULL,
+            reason TEXT NOT NULL,
+            status TEXT DEFAULT 'Pending',
+            admin_remarks TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    ''')
     
     # Create clients table
     cursor.execute(f'''
@@ -264,7 +473,9 @@ def init_db():
         ('client_name', 'submissions', 'TEXT'),
         ('work_type', 'submissions', 'TEXT'),
         ('quantity', 'submissions', 'INTEGER DEFAULT 1'),
-        ('employee_name', 'submissions', 'TEXT')
+        ('employee_name', 'submissions', 'TEXT'),
+        ('login_location', 'attendance', 'TEXT'),
+        ('logout_location', 'attendance', 'TEXT')
     ]:
         try:
             cursor.execute(f'ALTER TABLE {table} ADD COLUMN {column} {definition}')
@@ -385,6 +596,51 @@ def login():
             session['user_name'] = user['name']
             session['role'] = user['role']
             session['employment_type'] = dict(user).get('employment_type', 'inhouse')
+            
+            # Attendance login tracking (Not required for admin)
+            if user['role'] != 'admin':
+                try:
+                    today_str = date.today().isoformat()
+                    now_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    login_loc = request.form.get('login_location') or request.form.get('location') or 'Location Access Denied'
+                    conn = get_db_connection()
+                    # Check for existing active attendance session today
+                    active_att = execute_query(conn,
+                        'SELECT * FROM attendance WHERE user_id = ? AND date = ? AND status = ? ORDER BY id DESC LIMIT 1',
+                        (user['id'], today_str, 'Active')
+                    ).fetchone()
+                    
+                    if active_att:
+                        session['attendance_id'] = active_att['id']
+                        # Update login location if missing
+                        if not dict(active_att).get('login_location') and login_loc != 'Location Access Denied':
+                            execute_query(conn, 'UPDATE attendance SET login_location = ? WHERE id = ?', (login_loc, active_att['id']))
+                            if get_db_info()[1] == '?':
+                                conn.commit()
+                    else:
+                        # Create new login session entry
+                        db_url, q = get_db_info()
+                        if q == '%s':
+                            cursor = conn.cursor()
+                            cursor.execute(
+                                'INSERT INTO attendance (user_id, date, login_time, login_location, status) VALUES (%s, %s, %s, %s, %s) RETURNING id',
+                                (user['id'], today_str, now_ts, login_loc, 'Active')
+                            )
+                            res = cursor.fetchone()
+                            att_id = res['id'] if isinstance(res, dict) else res[0]
+                        else:
+                            cursor = conn.cursor()
+                            cursor.execute(
+                                'INSERT INTO attendance (user_id, date, login_time, login_location, status) VALUES (?, ?, ?, ?, ?)',
+                                (user['id'], today_str, now_ts, login_loc, 'Active')
+                            )
+                            conn.commit()
+                            att_id = cursor.lastrowid
+                        session['attendance_id'] = att_id
+                    conn.close()
+                except Exception as e:
+                    print(f"Attendance login tracking error: {e}")
+
             flash(f'Welcome back, {user["name"]}!', 'success')
             
             if user['role'] == 'admin':
@@ -398,6 +654,64 @@ def login():
 def logout():
     """Handle user logout"""
     name = session.get('user_name', 'User')
+    user_id = session.get('user_id')
+    role = session.get('role')
+    att_id = session.get('attendance_id')
+    logout_loc = request.args.get('location') or request.form.get('location') or 'Location Access Denied'
+    
+    # Mandatory report submission check for employees (Exempt if on approved leave)
+    if role == 'employee' and user_id:
+        today_str = date.today().isoformat()
+        try:
+            conn = get_db_connection()
+            # Check if user has an approved leave covering today
+            approved_leave = execute_query(conn,
+                'SELECT id FROM leaves WHERE user_id = ? AND status = ? AND start_date <= ? AND end_date >= ?',
+                (user_id, 'Approved', today_str, today_str)
+            ).fetchone()
+            
+            if not approved_leave:
+                sub_count = execute_query(conn,
+                    'SELECT COUNT(*) as count FROM submissions WHERE user_id = ? AND date = ?',
+                    (user_id, today_str)
+                ).fetchone()['count']
+                conn.close()
+                
+                if sub_count == 0:
+                    flash('please upload today tasks', 'error')
+                    return redirect(url_for('employee_dashboard'))
+            else:
+                conn.close()
+        except Exception as e:
+            print(f"Error checking employee submissions on logout: {e}")
+
+    if role != 'admin' and user_id:
+        try:
+            now_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            conn = get_db_connection()
+            att = None
+            if att_id:
+                att = execute_query(conn, 'SELECT * FROM attendance WHERE id = ?', (att_id,)).fetchone()
+            if not att:
+                today_str = date.today().isoformat()
+                att = execute_query(conn,
+                    'SELECT * FROM attendance WHERE user_id = ? AND date = ? AND status = ? ORDER BY id DESC LIMIT 1',
+                    (user_id, today_str, 'Active')
+                ).fetchone()
+                
+            if att:
+                att_dict = dict(att)
+                duration_str, raw_hours = format_attendance_duration(att_dict['login_time'], now_ts)
+                execute_query(conn,
+                    'UPDATE attendance SET logout_time = ?, logout_location = ?, total_hours = ?, status = ? WHERE id = ?',
+                    (now_ts, logout_loc, raw_hours, 'Completed', att_dict['id'])
+                )
+                if get_db_info()[1] == '?':
+                    conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"Attendance logout tracking error: {e}")
+
     session.clear()
     flash(f'Goodbye, {name}! You have been logged out.', 'success')
     return redirect(url_for('login'))
@@ -411,6 +725,11 @@ def employee_dashboard():
     
     conn = get_db_connection()
     
+    # Refresh user employment_type from DB to ensure session state is active and accurate
+    user_row = execute_query(conn, 'SELECT employment_type FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    if user_row and user_row['employment_type']:
+        session['employment_type'] = user_row['employment_type']
+
     # Check if submitted today and count submissions
     today = date.today().isoformat()
     submissions_today = execute_query(conn, 
@@ -420,18 +739,42 @@ def employee_dashboard():
     
     submission_count_today = len(submissions_today)
     
-    # Get recent submissions (filtered or last 20)
+    # Get recent submissions with pagination
+    try:
+        page = int(request.args.get('page', 1))
+    except (ValueError, TypeError):
+        page = 1
+    per_page = 10
+
     date_filter = request.args.get('date')
     if date_filter:
-        recent_submissions = [dict(row) for row in execute_query(conn, 
+        all_recent = [dict(row) for row in execute_query(conn, 
             'SELECT * FROM submissions WHERE user_id = ? AND date = ? ORDER BY created_at DESC',
             (session['user_id'], date_filter)
         ).fetchall()]
     else:
-        recent_submissions = [dict(row) for row in execute_query(conn, 
-            'SELECT * FROM submissions WHERE user_id = ? ORDER BY date DESC, created_at DESC LIMIT 20',
+        all_recent = [dict(row) for row in execute_query(conn, 
+            'SELECT * FROM submissions WHERE user_id = ? ORDER BY date DESC, created_at DESC',
             (session['user_id'],)
         ).fetchall()]
+
+    import math
+    total_emp_subs = len(all_recent)
+    total_pages = max(1, math.ceil(total_emp_subs / per_page))
+    page = min(max(1, page), total_pages)
+    offset = (page - 1) * per_page
+    recent_submissions = all_recent[offset : offset + per_page]
+
+    emp_pagination = {
+        'page': page,
+        'per_page': per_page,
+        'total': total_emp_subs,
+        'total_pages': total_pages,
+        'has_prev': page > 1,
+        'has_next': page < total_pages,
+        'prev_page': page - 1,
+        'next_page': page + 1
+    }
     
     # Get streak data for the user
     raw_streak_results = execute_query(conn,
@@ -458,6 +801,94 @@ def employee_dashboard():
     clients_raw = execute_query(conn, "SELECT name FROM clients ORDER BY name").fetchall()
     all_clients = [r['name'] for r in clients_raw]
     
+    # Attendance summary for today
+    today_att_raw = execute_query(conn,
+        'SELECT * FROM attendance WHERE user_id = ? AND date = ? ORDER BY id DESC LIMIT 1',
+        (session['user_id'], today)
+    ).fetchone()
+    
+    today_attendance = None
+    if today_att_raw:
+        today_attendance = dict(today_att_raw)
+        dur_str, raw_hrs = format_attendance_duration(today_attendance['login_time'], today_attendance.get('logout_time'))
+        today_attendance['formatted_duration'] = dur_str
+        today_attendance['computed_hours'] = raw_hrs
+
+    # Recent attendance history (last 14 days)
+    recent_att_raw = execute_query(conn,
+        'SELECT * FROM attendance WHERE user_id = ? ORDER BY date DESC, login_time DESC LIMIT 14',
+        (session['user_id'],)
+    ).fetchall()
+    
+    recent_attendance = []
+    for r in recent_att_raw:
+        row_dict = dict(r)
+        dur_str, raw_hrs = format_attendance_duration(row_dict['login_time'], row_dict.get('logout_time'))
+        row_dict['formatted_duration'] = dur_str
+        row_dict['computed_hours'] = raw_hrs
+        recent_attendance.append(row_dict)
+
+    # Fetch leave applications for employee
+    user_leaves_raw = execute_query(conn,
+        'SELECT * FROM leaves WHERE user_id = ? ORDER BY created_at DESC',
+        (session['user_id'],)
+    ).fetchall()
+    
+    user_leaves = [dict(row) for row in user_leaves_raw]
+    today_approved_leave = False
+    today_leave_info = None
+    for leave in user_leaves:
+        try:
+            d1 = datetime.strptime(str(leave['start_date'])[:10], '%Y-%m-%d')
+            d2 = datetime.strptime(str(leave['end_date'])[:10], '%Y-%m-%d')
+            leave['total_days'] = (d2 - d1).days + 1
+        except Exception:
+            leave['total_days'] = 1
+            
+        if leave['status'] == 'Approved' and str(leave['start_date'])[:10] <= today <= str(leave['end_date'])[:10]:
+            today_approved_leave = True
+            today_leave_info = leave
+
+    # Update today's attendance summary if on approved leave
+    if today_approved_leave and today_leave_info:
+        if not today_attendance:
+            today_attendance = {
+                'id': f"today_leave_{session['user_id']}",
+                'user_id': session['user_id'],
+                'date': today,
+                'login_time': None,
+                'logout_time': None,
+                'login_location': 'On Leave',
+                'logout_location': 'On Leave',
+                'total_hours': 0,
+                'formatted_duration': 'On Leave',
+                'status': f"On Leave ({today_leave_info['leave_type']})",
+                'is_leave': True,
+                'leave_type': today_leave_info['leave_type']
+            }
+        else:
+            today_attendance['status'] = f"On Leave ({today_leave_info['leave_type']})"
+            today_attendance['is_leave'] = True
+            today_attendance['leave_type'] = today_leave_info['leave_type']
+            today_attendance['formatted_duration'] = 'On Leave'
+
+    # Collect all approved leave dates (YYYY-MM-DD) for calendar streak visualization
+    approved_leave_dates = []
+    for leave in user_leaves:
+        if leave.get('status') == 'Approved':
+            try:
+                s_dt = datetime.strptime(str(leave['start_date'])[:10], '%Y-%m-%d').date()
+                e_dt = datetime.strptime(str(leave['end_date'])[:10], '%Y-%m-%d').date()
+                curr = s_dt
+                while curr <= e_dt:
+                    approved_leave_dates.append(curr.isoformat())
+                    curr += timedelta(days=1)
+            except Exception:
+                pass
+
+    # Merge recent attendance history with approved leaves
+    recent_attendance = merge_attendance_with_leaves(conn, recent_attendance, user_id=session['user_id'], limit=14)
+
     conn.close()
     
     return render_template(
@@ -466,9 +897,15 @@ def employee_dashboard():
         submission_count_today=submission_count_today,
         submissions_today=submissions_today,
         recent_submissions=recent_submissions,
+        emp_pagination=emp_pagination,
         raw_streak=raw_streak,
+        approved_leave_dates=approved_leave_dates,
         client_distribution=client_distribution,
         all_clients=all_clients,
+        today_attendance=today_attendance,
+        recent_attendance=recent_attendance,
+        user_leaves=user_leaves,
+        today_approved_leave=today_approved_leave,
         now=datetime.now()
     )
 
@@ -480,6 +917,12 @@ def submit_report():
         flash('Admins cannot submit work reports.', 'error')
         return redirect(url_for('admin_dashboard'))
     
+    conn = get_db_connection()
+    user_row = execute_query(conn, 'SELECT employment_type FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    emp_type = user_row['employment_type'] if user_row and user_row['employment_type'] else session.get('employment_type', 'inhouse')
+    session['employment_type'] = emp_type
+    conn.close()
+
     work_text = request.form.get('work_text', '').strip()
     client_category = request.form.get('client_category', '').strip()
     client_name = request.form.get('client_name', '').strip()
@@ -489,18 +932,25 @@ def submit_report():
     quantity = request.form.get('quantity', 1)
     
     today = date.today().isoformat()
-    
-    # Allow backdating if provided
     submission_date = request.form.get('submission_date')
-    if submission_date:
-        try:
-            submission_dt = datetime.strptime(submission_date, '%Y-%m-%d').date()
-            if submission_dt > date.today():
-                flash('Cannot submit reports for future dates.', 'error')
-                return redirect(url_for('employee_dashboard'))
-            today = submission_date
-        except ValueError:
-            pass # Keep today as default if invalid format
+    
+    if emp_type == 'freelancer':
+        # Freelancer can edit/select submission date (including past dates)
+        if submission_date:
+            try:
+                submission_dt = datetime.strptime(submission_date, '%Y-%m-%d').date()
+                if submission_dt > date.today():
+                    flash('Cannot submit reports for future dates.', 'error')
+                    return redirect(url_for('employee_dashboard'))
+                today = submission_date
+            except ValueError:
+                pass # Keep today as default if invalid format
+    else:
+        # In-house employees are restricted to today's date only
+        if submission_date and submission_date != today:
+            flash('In-house employees are not permitted to change or edit the submission date.', 'error')
+            return redirect(url_for('employee_dashboard'))
+        today = date.today().isoformat()
     
     # Handle 'Other' client name
     if client_name in ['Others', 'Other'] and other_client_name:
@@ -527,6 +977,7 @@ def submit_report():
             file.save(file_path)
     
     conn = get_db_connection()
+    ensure_client_exists(conn, client_name, client_category)
     
     # Check for duplicate submission (same text, client, and work type on same day)
     existing_check = execute_query(conn, 
@@ -563,6 +1014,119 @@ def submit_report():
         conn.close()
     
     return redirect(url_for('employee_dashboard'))
+
+@app.route('/employee/apply-leave', methods=['POST'])
+@login_required
+def apply_leave():
+    """Submit a leave application"""
+    if session.get('role') == 'admin':
+        flash('Admins do not need to apply for leave.', 'error')
+        return redirect(url_for('admin_dashboard'))
+        
+    conn = get_db_connection()
+    user_row = execute_query(conn, 'SELECT employment_type FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    emp_type = user_row['employment_type'] if user_row and user_row['employment_type'] else session.get('employment_type', 'inhouse')
+    if emp_type == 'freelancer':
+        conn.close()
+        flash('Freelancers are not eligible to apply for leaves.', 'error')
+        return redirect(url_for('employee_dashboard'))
+
+    leave_type = request.form.get('leave_type', '').strip()
+    start_date = request.form.get('start_date', '').strip()
+    end_date = request.form.get('end_date', '').strip()
+    reason = request.form.get('reason', '').strip()
+    
+    if not leave_type or not start_date or not end_date or not reason:
+        flash('Please fill in all required fields to apply for leave.', 'error')
+        return redirect(url_for('employee_dashboard'))
+        
+    try:
+        d1 = datetime.strptime(start_date, '%Y-%m-%d').date()
+        d2 = datetime.strptime(end_date, '%Y-%m-%d').date()
+        if d1 > d2:
+            flash('Start date cannot be after end date.', 'error')
+            return redirect(url_for('employee_dashboard'))
+    except ValueError:
+        flash('Invalid date format provided.', 'error')
+        return redirect(url_for('employee_dashboard'))
+        
+    conn = get_db_connection()
+    try:
+        execute_query(conn,
+            'INSERT INTO leaves (user_id, leave_type, start_date, end_date, reason, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            (session['user_id'], leave_type, start_date, end_date, reason, 'Pending', datetime.now())
+        )
+        if get_db_info()[1] == '?':
+            conn.commit()
+        flash('Leave application submitted successfully! Pending admin approval.', 'success')
+    except Exception as e:
+        flash(f'Error submitting leave application: {str(e)}', 'error')
+    finally:
+        conn.close()
+        
+    return redirect(url_for('employee_dashboard'))
+
+@app.route('/employee/cancel-leave/<int:leave_id>', methods=['POST'])
+@login_required
+def cancel_leave(leave_id):
+    """Cancel a pending leave application"""
+    conn = get_db_connection()
+    leave = execute_query(conn, 'SELECT * FROM leaves WHERE id = ? AND user_id = ?', (leave_id, session['user_id'])).fetchone()
+    if not leave:
+        conn.close()
+        flash('Leave application not found.', 'error')
+        return redirect(url_for('employee_dashboard'))
+        
+    leave_dict = dict(leave)
+    if leave_dict['status'] != 'Pending':
+        conn.close()
+        flash('Only pending leave applications can be cancelled.', 'error')
+        return redirect(url_for('employee_dashboard'))
+        
+    try:
+        execute_query(conn, 'UPDATE leaves SET status = ? WHERE id = ?', ('Cancelled', leave_id))
+        if get_db_info()[1] == '?':
+            conn.commit()
+        flash('Leave application cancelled successfully.', 'success')
+    except Exception as e:
+        flash(f'Error cancelling leave application: {str(e)}', 'error')
+    finally:
+        conn.close()
+        
+    return redirect(url_for('employee_dashboard'))
+
+@app.route('/admin/leave/action/<int:leave_id>', methods=['POST'])
+@admin_required
+def admin_leave_action(leave_id):
+    """Approve or Reject a leave application"""
+    action = request.form.get('action', '').strip()
+    admin_remarks = request.form.get('admin_remarks', '').strip()
+    
+    if action not in ['Approved', 'Rejected']:
+        flash('Invalid action requested.', 'error')
+        return redirect(url_for('admin_dashboard'))
+        
+    conn = get_db_connection()
+    leave = execute_query(conn, 'SELECT * FROM leaves WHERE id = ?', (leave_id,)).fetchone()
+    if not leave:
+        conn.close()
+        flash('Leave application not found.', 'error')
+        return redirect(url_for('admin_dashboard'))
+        
+    try:
+        execute_query(conn,
+            'UPDATE leaves SET status = ?, admin_remarks = ? WHERE id = ?',
+            (action, admin_remarks, leave_id)
+        )
+        if get_db_info()[1] == '?':
+            conn.commit()
+        flash(f'Leave application successfully {action.lower()}.', 'success')
+    except Exception as e:
+        flash(f'Error updating leave application: {str(e)}', 'error')
+    finally:
+        conn.close()
+        
+    return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/dashboard')
 @admin_required
@@ -606,7 +1170,31 @@ def admin_dashboard():
     
     query += ' ORDER BY s.date DESC, s.created_at DESC'
     
-    submissions = [dict(row) for row in execute_query(conn, query, params).fetchall()]
+    # Pagination for Work Submissions
+    try:
+        page = int(request.args.get('page', 1))
+    except (ValueError, TypeError):
+        page = 1
+    per_page = 15
+
+    all_submissions = [dict(row) for row in execute_query(conn, query, params).fetchall()]
+    import math
+    total_sub_count = len(all_submissions)
+    total_pages = max(1, math.ceil(total_sub_count / per_page))
+    page = min(max(1, page), total_pages)
+    offset = (page - 1) * per_page
+    submissions = all_submissions[offset : offset + per_page]
+
+    pagination = {
+        'page': page,
+        'per_page': per_page,
+        'total': total_sub_count,
+        'total_pages': total_pages,
+        'has_prev': page > 1,
+        'has_next': page < total_pages,
+        'prev_page': page - 1,
+        'next_page': page + 1
+    }
     
     # Get all employees and freelancers separately
     employees_raw = [dict(row) for row in execute_query(conn, 
@@ -619,35 +1207,37 @@ def admin_dashboard():
         ('employee', 'freelancer')
     ).fetchall()]
 
-    # Calculate monthly amounts for both employees and freelancers
+    # Batch calculate monthly amounts for all employees and freelancers in a single query
     current_month = date.today().strftime('%Y-%m')
+    rates_dict = get_all_rates()
     
+    monthly_subs_rows = execute_query(conn, '''
+        SELECT user_id, work_type, SUM(CAST(quantity AS INTEGER)) as total_qty
+        FROM submissions
+        WHERE strftime("%Y-%m", date) = ?
+        GROUP BY user_id, work_type
+    ''', (current_month,)).fetchall()
+    
+    user_monthly_totals = {}
+    for r in monthly_subs_rows:
+        uid = r['user_id']
+        wtype = r['work_type']
+        qty = r['total_qty'] or 0
+        rate = rates_dict.get(wtype, 0)
+        user_monthly_totals[uid] = user_monthly_totals.get(uid, 0) + (rate * qty)
+
     # Process employees (inhouse)
     employees_with_amounts = []
     for e in employees_raw:
         e_dict = dict(e)
-        # Get all submissions for this employee for the current month
-        e_submissions = execute_query(conn, 
-            'SELECT s.work_type, s.quantity FROM submissions s LEFT JOIN users u ON s.user_id = u.id WHERE s.user_id = ? AND strftime("%Y-%m", s.date) = ?',
-            (e['id'], current_month)
-        ).fetchall()
-        
-        total_amount = sum(calculate_submission_amount(s['work_type'], s['quantity'], 'inhouse') for s in e_submissions)
-        e_dict['monthly_amount'] = total_amount
+        e_dict['monthly_amount'] = user_monthly_totals.get(e['id'], 0)
         employees_with_amounts.append(e_dict)
     
     # Process freelancers
     freelancers_with_amounts = []
     for f in freelancers:
         f_dict = dict(f)
-        # Get all submissions for this freelancer for the current month
-        f_submissions = execute_query(conn, 
-            'SELECT work_type, quantity FROM submissions WHERE user_id = ? AND strftime("%Y-%m", date) = ?',
-            (f['id'], current_month)
-        ).fetchall()
-        
-        total_amount = sum(calculate_submission_amount(s['work_type'], s['quantity'], 'freelancer') for s in f_submissions)
-        f_dict['monthly_amount'] = total_amount
+        f_dict['monthly_amount'] = user_monthly_totals.get(f['id'], 0)
         freelancers_with_amounts.append(f_dict)
     
     # Get statistics
@@ -662,14 +1252,101 @@ def admin_dashboard():
     clients_raw = execute_query(conn, "SELECT name FROM clients ORDER BY name").fetchall()
     all_clients = [r['name'] for r in clients_raw]
     
+    # Fetch attendance logs for Admin (Employees only)
+    att_query = '''
+        SELECT a.*, u.name as user_name, u.email as user_email, u.role, u.employment_type
+        FROM attendance a
+        JOIN users u ON a.user_id = u.id
+        WHERE u.role != 'admin'
+    '''
+    att_params = []
+    if employee_filter:
+        att_query += ' AND LOWER(u.name) LIKE LOWER(?)'
+        att_params.append(f'%{employee_filter}%')
+    if start_date:
+        att_query += ' AND a.date >= ?'
+        att_params.append(start_date)
+    if end_date:
+        att_query += ' AND a.date <= ?'
+        att_params.append(end_date)
+        
+    att_query += ' ORDER BY a.date DESC, a.login_time DESC LIMIT 150'
+    
+    attendance_raw = execute_query(conn, att_query, att_params).fetchall()
+    attendance_logs = []
+    for row in attendance_raw:
+        r = dict(row)
+        dur_str, raw_hrs = format_attendance_duration(r['login_time'], r.get('logout_time'))
+        r['formatted_duration'] = dur_str
+        r['computed_hours'] = raw_hrs
+        attendance_logs.append(r)
+
+    # Merge attendance logs with approved leaves for Admin
+    attendance_logs = merge_attendance_with_leaves(conn, attendance_logs, limit=150)
+
+    # Fetch filter parameters
+    employee_filter = request.args.get('employee', '').strip()
+    start_date = request.args.get('start_date', '').strip()
+    end_date = request.args.get('end_date', '').strip()
+    employment_type_filter = request.args.get('employment_type', 'both').strip()
+    month_filter = request.args.get('month', '').strip()
+    leave_status_filter = request.args.get('leave_status', '').strip()
+    leave_type_filter = request.args.get('leave_type', '').strip()
+
+    # Fetch leave applications for Admin with filters
+    leave_query = '''
+        SELECT l.*, u.name as employee_name, u.email as employee_email, u.employment_type
+        FROM leaves l
+        JOIN users u ON l.user_id = u.id
+        WHERE 1=1
+    '''
+    leave_params = []
+    if employee_filter:
+        leave_query += ' AND (LOWER(u.name) LIKE LOWER(?) OR LOWER(u.email) LIKE LOWER(?))'
+        leave_params.extend([f'%{employee_filter}%', f'%{employee_filter}%'])
+    if leave_status_filter and leave_status_filter != 'All':
+        leave_query += ' AND l.status = ?'
+        leave_params.append(leave_status_filter)
+    if leave_type_filter and leave_type_filter != 'All':
+        leave_query += ' AND l.leave_type = ?'
+        leave_params.append(leave_type_filter)
+    if month_filter:
+        leave_query += ' AND (substr(l.start_date, 1, 7) = ? OR substr(l.end_date, 1, 7) = ?)'
+        leave_params.extend([month_filter, month_filter])
+    else:
+        if start_date:
+            leave_query += ' AND l.start_date >= ?'
+            leave_params.append(start_date)
+        if end_date:
+            leave_query += ' AND l.end_date <= ?'
+            leave_params.append(end_date)
+            
+    leave_query += ' ORDER BY CASE WHEN l.status = "Pending" THEN 1 ELSE 2 END, l.created_at DESC'
+    
+    all_leaves_raw = execute_query(conn, leave_query, leave_params).fetchall()
+    all_leaves = [dict(row) for row in all_leaves_raw]
+    for leave in all_leaves:
+        try:
+            d1 = datetime.strptime(str(leave['start_date'])[:10], '%Y-%m-%d')
+            d2 = datetime.strptime(str(leave['end_date'])[:10], '%Y-%m-%d')
+            leave['total_days'] = (d2 - d1).days + 1
+        except Exception:
+            leave['total_days'] = 1
+            
+    pending_leaves_count = sum(1 for l in all_leaves if l['status'] == 'Pending')
+
     conn.close()
     
     try:
         return render_template(
             'admin_dashboard.html',
             submissions=submissions,
+            pagination=pagination,
             employees=employees_with_amounts,
             freelancers=freelancers_with_amounts,
+            attendance_logs=attendance_logs,
+            all_leaves=all_leaves,
+            pending_leaves_count=pending_leaves_count,
             total_submissions=total_submissions,
             total_employees=len(employees_with_amounts),
             total_freelancers=len(freelancers),
@@ -677,6 +1354,9 @@ def admin_dashboard():
             employee_filter=employee_filter,
             start_date=start_date,
             end_date=end_date,
+            month_filter=month_filter,
+            leave_status_filter=leave_status_filter,
+            leave_type_filter=leave_type_filter,
             employment_type_filter=employment_type_filter,
             all_clients=all_clients,
             now=datetime.now()
@@ -741,6 +1421,7 @@ def admin_submit_report():
             file.save(file_path)
     
     conn = get_db_connection()
+    ensure_client_exists(conn, client_name, client_category)
     # Check for duplicate submission
     existing_check = execute_query(conn, 
         '''SELECT id FROM submissions 
@@ -1420,6 +2101,10 @@ def edit_report(report_id):
         conn.close()
         flash('Access denied.', 'error')
         return redirect(url_for('index'))
+    # Determine user's employment type
+    user_row = execute_query(conn, 'SELECT employment_type FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    emp_type = user_row['employment_type'] if user_row and user_row['employment_type'] else session.get('employment_type', 'inhouse')
+
     if request.method == 'POST':
         work_text = request.form.get('work_text', '').strip()
         client_category = request.form.get('client_category', '').strip()
@@ -1428,6 +2113,22 @@ def edit_report(report_id):
         work_type = request.form.get('work_type', '').strip()
         other_work_type_name = request.form.get('other_work_type_name', '').strip()
         quantity = request.form.get('quantity', '1')
+
+        # Allow date editing for freelancers and admin only
+        report_date = report['date']
+        if emp_type == 'freelancer' or session.get('role') == 'admin':
+            new_date = request.form.get('submission_date')
+            if new_date:
+                try:
+                    new_dt = datetime.strptime(new_date, '%Y-%m-%d').date()
+                    if new_dt > date.today():
+                        flash('Cannot set report date to a future date.', 'error')
+                        conn.close()
+                        return render_template('edit_report.html', report=report, now=datetime.now())
+                    report_date = new_date
+                except ValueError:
+                    pass
+
         if client_name in ['Others', 'Other'] and other_client_name:
             client_name = other_client_name
         if work_type == 'Other' and other_work_type_name:
@@ -1449,9 +2150,10 @@ def edit_report(report_id):
                         except: pass
                     file_path = new_file_path
             try:
+                ensure_client_exists(conn, client_name, client_category)
                 execute_query(conn, 
-                    '''UPDATE submissions SET work_text = ?, file_path = ?, client_category = ?, client_name = ?, work_type = ?, quantity = ? WHERE id = ?''',
-                    (work_text, file_path, client_category, client_name, work_type, quantity, report_id)
+                    '''UPDATE submissions SET work_text = ?, file_path = ?, client_category = ?, client_name = ?, work_type = ?, quantity = ?, date = ? WHERE id = ?''',
+                    (work_text, file_path, client_category, client_name, work_type, quantity, report_date, report_id)
                 )
                 conn.commit()
                 flash('Report updated successfully!', 'success')
@@ -1459,7 +2161,7 @@ def edit_report(report_id):
             except Exception as e:
                 flash(f'Error updating report: {str(e)}', 'error')
     conn.close()
-    return render_template('edit_report.html', report=report)
+    return render_template('edit_report.html', report=report, now=datetime.now())
 
 @app.route('/report/delete/<int:report_id>', methods=['POST'])
 @login_required
@@ -1696,19 +2398,30 @@ def client_statistics():
 def add_client():
     """Add a new standard client with category"""
     name = request.form.get('name', '').strip()
-    category = request.form.get('category', 'Corporate')
+    category = request.form.get('category', 'Corporate').strip()
     if not name:
         flash('Client name is required.', 'error')
     else:
         conn = get_db_connection()
         try:
-            execute_query(conn, 'INSERT INTO clients (name, category) VALUES (?, ?)', (name, category))
-            conn.commit()
-            flash(f'Client "{name}" ({category}) added successfully!', 'success')
+            existing = execute_query(conn, 'SELECT id FROM clients WHERE LOWER(name) = LOWER(?)', (name,)).fetchone()
+            if not existing:
+                db_url, q = get_db_info()
+                if q == '%s':
+                    cursor = conn.cursor()
+                    cursor.execute('INSERT INTO clients (name, category) VALUES (%s, %s)', (name, category))
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute('INSERT INTO clients (name, category) VALUES (?, ?)', (name, category))
+                    conn.commit()
+                flash(f'Client "{name}" ({category}) added successfully!', 'success')
+            else:
+                flash(f'Client "{name}" already exists!', 'info')
         except Exception as e:
             flash(f'Error adding client: {str(e)}', 'error')
-        conn.close()
-    return redirect(url_for('client_statistics'))
+        finally:
+            conn.close()
+    return redirect(request.referrer or url_for('client_statistics'))
 
 @app.route('/admin/clients/delete/<int:client_id>', methods=['POST'])
 @admin_required
@@ -1717,12 +2430,13 @@ def delete_client(client_id):
     conn = get_db_connection()
     try:
         execute_query(conn, 'DELETE FROM clients WHERE id = ?', (client_id,))
-        conn.commit()
+        if get_db_info()[1] == '?':
+            conn.commit()
         flash('Client deleted successfully!', 'success')
     except Exception as e:
         flash(f'Error deleting client: {str(e)}', 'error')
     conn.close()
-    return redirect(url_for('client_statistics'))
+    return redirect(request.referrer or url_for('client_statistics'))
 
 @app.route('/api/clients')
 def get_clients_api():
@@ -1734,31 +2448,35 @@ def get_clients_api():
         try:
             execute_query(conn, "SELECT category FROM clients LIMIT 1")
         except:
-            # Add category column if it's missing
             print("Adding missing 'category' column to clients table")
-            _, q = get_db_info()
+            db_url, q = get_db_info()
             if q == '%s':
                 execute_query(conn, "ALTER TABLE clients ADD COLUMN category TEXT DEFAULT 'Corporate'")
             else:
                 execute_query(conn, "ALTER TABLE clients ADD COLUMN category TEXT DEFAULT 'Corporate'")
-            conn.commit()
+                conn.commit()
 
-        clients = execute_query(conn, "SELECT name, category FROM clients ORDER BY name").fetchall()
+        clients = execute_query(conn, "SELECT name, category FROM clients ORDER BY LOWER(name) ASC").fetchall()
         
         # Categorize results
         results = {'Political': [], 'Corporate': []}
         for c in clients:
             try:
-                # Handle both sqlite3.Row and RealDictCursor
                 c_dict = dict(c)
                 cat = c_dict.get('category', 'Corporate')
                 if cat not in ['Political', 'Corporate']:
                     cat = 'Corporate'
-                results[cat].append(c_dict.get('name', 'Unknown'))
+                name_val = c_dict.get('name', '').strip()
+                if name_val and name_val not in ['Other', 'Others'] and name_val not in results[cat]:
+                    results[cat].append(name_val)
             except Exception as row_err:
                 print(f"Error processing client row: {row_err}")
                 continue
         
+        # Sort each category alphabetically
+        results['Political'].sort(key=lambda s: s.lower())
+        results['Corporate'].sort(key=lambda s: s.lower())
+
         # Ensure "Other/Others" is at the end
         if 'Others' not in results['Political']: results['Political'].append('Others')
         if 'Other' not in results['Corporate']: results['Corporate'].append('Other')

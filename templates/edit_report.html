@@ -25,7 +25,23 @@
                 enctype="multipart/form-data" class="report-form" style="padding: var(--spacing-xl);">
 
                 <div class="form-grid"
-                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
+                    <div class="form-group">
+                        <label for="submission_date" class="form-label">Submission Date <span
+                                style="color: var(--error);">*</span></label>
+                        {% if session.get('employment_type') == 'freelancer' or session.get('role') == 'admin' %}
+                        <input type="date" id="submission_date" name="submission_date" class="form-input"
+                            value="{{ report['date'] }}" max="{{ now.strftime('%Y-%m-%d') }}" required>
+                        <div class="form-help">Freelancers can update the submission date (past dates allowed)</div>
+                        {% else %}
+                        <input type="date" id="submission_date" class="form-input"
+                            value="{{ report['date'] }}" disabled
+                            style="background: rgba(0, 0, 0, 0.04); cursor: not-allowed;"
+                            title="In-house employees cannot edit submission date">
+                        <input type="hidden" name="submission_date" value="{{ report['date'] }}">
+                        <div class="form-help" style="color: var(--gray-500);">🔒 In-house employees cannot edit report date</div>
+                        {% endif %}
+                    </div>
                     <div class="form-group">
                         <label for="client_category" class="form-label">Client Category <span
                                 style="color: var(--error);">*</span></label>

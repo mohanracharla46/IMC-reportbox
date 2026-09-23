@@ -17,15 +17,28 @@
                 <line x1="8" y1="2" x2="8" y2="6" />
                 <line x1="3" y1="10" x2="21" y2="10" />
             </svg>
+            {% if session.get('employment_type') == 'freelancer' %}
             <input type="date" name="submission_date" id="submission-date" form="report-form"
                 value="{{ now.strftime('%Y-%m-%d') }}" max="{{ now.strftime('%Y-%m-%d') }}" required
-                style="background: transparent; border: 1px solid var(--gray-300); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 0.9rem; color: var(--text-primary);">
+                style="background: transparent; border: 1px solid var(--gray-300); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 0.9rem; color: var(--text-primary);"
+                title="Select date for work report (Freelancers can submit for past dates)">
+            {% else %}
+            <input type="date" id="submission-date-disabled"
+                value="{{ now.strftime('%Y-%m-%d') }}" disabled
+                style="background: rgba(0, 0, 0, 0.05); border: 1px solid var(--gray-300); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 0.9rem; color: var(--text-muted); cursor: not-allowed;"
+                title="In-house employees cannot edit submission date">
+            <input type="hidden" name="submission_date" id="submission-date" form="report-form" value="{{ now.strftime('%Y-%m-%d') }}">
+            <span style="font-size: 0.75rem; color: var(--gray-500); font-weight: 500; display: inline-flex; align-items: center; gap: 2px;" title="Date editing restricted to freelancers">
+                🔒 Today
+            </span>
+            {% endif %}
         </div>
     </div>
 
     <!-- Status Section -->
-    <div class="status-section" style="margin-bottom: var(--spacing-xl);">
-        <div class="status-card {% if submitted_today %}status-submitted{% else %}status-pending{% endif %}">
+    <div class="status-section" style="margin-bottom: var(--spacing-xl); display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem;">
+        <!-- Submission Status Card -->
+        <div class="status-card {% if submitted_today %}status-submitted{% else %}status-pending{% endif %}" style="margin: 0;">
             <div class="status-header">
                 <div class="status-icon">
                     {% if submitted_today %}
@@ -42,7 +55,7 @@
                     {% endif %}
                 </div>
                 <div class="status-info">
-                    <h3 class="status-title">Today's Status</h3>
+                    <h3 class="status-title">Today's Report Status</h3>
                     <p class="status-label">
                         {% if submitted_today %}
                         {{ submission_count_today }} Submission{{ 's' if submission_count_today > 1 else '' }} Today
@@ -53,11 +66,71 @@
                 </div>
             </div>
             {% if submitted_today %}
-            <p class="status-message">Great job! You can submit more if needed.
-            </p>
+            <p class="status-message">Great job! You can submit more if needed.</p>
             {% else %}
             <p class="status-message">Submit your first work report for today.</p>
             {% endif %}
+        </div>
+
+        <!-- Attendance & Work Hours Card -->
+        <div class="status-card" style="margin: 0; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); color: #ffffff; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.4);">
+            <div class="status-header" style="align-items: flex-start;">
+                <div class="status-icon" style="background: rgba(59, 130, 246, 0.25); color: #60a5fa; border: 1px solid rgba(96, 165, 250, 0.3);">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                </div>
+                <div class="status-info" style="width: 100%;">
+                    <h3 class="status-title" style="color: #94a3b8; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em;">Today's Attendance & Hours</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 0.75rem; margin-top: 0.75rem; background: rgba(255,255,255,0.05); padding: 0.75rem; border-radius: 8px;">
+                        <div>
+                            <div style="font-size: 0.7rem; color: #94a3b8; font-weight: 500;">Login Time</div>
+                            <div style="font-size: 1.05rem; font-weight: 700; color: #38bdf8; margin-top: 2px;">
+                                {% if today_attendance and (today_attendance.is_leave or 'On Leave' in today_attendance.status) %}
+                                    <span style="color: #f59e0b; font-size: 0.95rem;">On Leave</span>
+                                {% elif today_attendance and today_attendance.login_time %}
+                                    {{ today_attendance.login_time|format_time_12h }}
+                                {% else %}
+                                    --:--
+                                {% endif %}
+                            </div>
+                            <div style="font-size: 0.68rem; color: #cbd5e1; margin-top: 2px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="{{ today_attendance.login_location if today_attendance else '' }}">
+                                📍 {{ today_attendance.login_location if (today_attendance and today_attendance.login_location) else 'No location' }}
+                            </div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.7rem; color: #94a3b8; font-weight: 500;">Logout Time</div>
+                            <div style="font-size: 1.05rem; font-weight: 700; color: #38bdf8; margin-top: 2px;">
+                                {% if today_attendance and (today_attendance.is_leave or 'On Leave' in today_attendance.status) %}
+                                    <span style="color: #f59e0b; font-size: 0.95rem;">On Leave</span>
+                                {% elif today_attendance and today_attendance.logout_time %}
+                                    {{ today_attendance.logout_time|format_time_12h }}
+                                {% elif today_attendance and today_attendance.status == 'Active' %}
+                                    <span style="display: inline-flex; align-items: center; gap: 4px; color: #4ade80; font-size: 0.85rem; background: rgba(74, 222, 128, 0.15); padding: 2px 6px; border-radius: 4px;">
+                                        <span style="width: 6px; height: 6px; border-radius: 50%; background-color: #4ade80; display: inline-block;"></span> Active
+                                    </span>
+                                {% else %}
+                                    --:--
+                                {% endif %}
+                            </div>
+                            <div style="font-size: 0.68rem; color: #cbd5e1; margin-top: 2px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="{{ today_attendance.logout_location if today_attendance else '' }}">
+                                📍 {{ today_attendance.logout_location if (today_attendance and today_attendance.logout_location) else 'Pending' }}
+                            </div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.7rem; color: #94a3b8; font-weight: 500;">Total Hours</div>
+                            <div style="font-size: 1.05rem; font-weight: 700; color: #facc15; margin-top: 2px;">
+                                {% if today_attendance %}
+                                    {{ today_attendance.formatted_duration }}
+                                {% else %}
+                                    0 hrs
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -253,6 +326,13 @@
                         box-shadow: 0 3px 6px rgba(1, 181, 178, 0.3);
                     }
 
+                    .calendar-day.on-leave-streak {
+                        background: #ef4444;
+                        color: #ffffff;
+                        font-weight: 600;
+                        box-shadow: 0 3px 6px rgba(239, 68, 68, 0.35);
+                    }
+
                     .calendar-day.empty-cell {
                         background: transparent;
                     }
@@ -276,6 +356,18 @@
                     </div>
                     <div class="calendar-grid" id="calendar-grid">
                         <!-- Dates populating dynamically -->
+                    </div>
+
+                    <!-- Calendar Legend -->
+                    <div style="display: flex; justify-content: center; gap: 1.25rem; margin-top: 1.2rem; font-size: 0.78rem; color: var(--gray-600);">
+                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                            <span style="width: 10px; height: 10px; border-radius: 50%; background: #01b5b2; display: inline-block;"></span>
+                            <span>Work Submitted</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                            <span style="width: 10px; height: 10px; border-radius: 50%; background: #ef4444; display: inline-block;"></span>
+                            <span>On Leave</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -407,6 +499,36 @@
             </tbody>
         </table>
     </div>
+
+    <!-- Pagination Controls for Employee Work Submissions -->
+    {% if emp_pagination and emp_pagination.total > 0 %}
+    <div class="pagination-bar" style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; background: #ffffff; border-top: 1px solid var(--gray-200); border-radius: 0 0 var(--radius-xl) var(--radius-xl); flex-wrap: wrap; gap: 1rem;">
+        <div style="font-size: 0.875rem; color: var(--gray-600);">
+            Showing <strong>{{ (emp_pagination.page - 1) * emp_pagination.per_page + 1 }}</strong> - <strong>{{ [emp_pagination.page * emp_pagination.per_page, emp_pagination.total]|min }}</strong> of <strong>{{ emp_pagination.total }}</strong> submissions
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            {% if emp_pagination.has_prev %}
+            <a href="{{ url_for('employee_dashboard', page=emp_pagination.prev_page, date=request.args.get('date', '')) }}" class="btn btn-sm btn-ghost" style="border: 1px solid var(--gray-300);">
+                &laquo; Prev
+            </a>
+            {% else %}
+            <button class="btn btn-sm btn-ghost" disabled style="opacity: 0.4; cursor: not-allowed; border: 1px solid var(--gray-200);">&laquo; Prev</button>
+            {% endif %}
+
+            <span style="font-size: 0.875rem; font-weight: 600; color: var(--gray-800); padding: 0 0.5rem;">
+                Page {{ emp_pagination.page }} of {{ emp_pagination.total_pages }}
+            </span>
+
+            {% if emp_pagination.has_next %}
+            <a href="{{ url_for('employee_dashboard', page=emp_pagination.next_page, date=request.args.get('date', '')) }}" class="btn btn-sm btn-ghost" style="border: 1px solid var(--gray-300);">
+                Next &raquo;
+            </a>
+            {% else %}
+            <button class="btn btn-sm btn-ghost" disabled style="opacity: 0.4; cursor: not-allowed; border: 1px solid var(--gray-200);">Next &raquo;</button>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
     {% else %}
     <div class="empty-state">
         <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -421,10 +543,299 @@
     </div>
     {% endif %}
 </div>
+
+<!-- Attendance & Work Hours Log -->
+<div class="card" style="margin-top: var(--spacing-xl);">
+    <div class="card-header">
+        <div class="header-info">
+            <h2 class="card-title">Attendance & Work Hours Log</h2>
+            <p class="card-subtitle">Your login time, logout time, and total daily work hours</p>
+        </div>
+    </div>
+
+    {% if recent_attendance %}
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Login Time</th>
+                    <th>Login Location</th>
+                    <th>Logout Time</th>
+                    <th>Logout Location</th>
+                    <th>Total Hours</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for att in recent_attendance %}
+                <tr>
+                    <td>
+                        <span class="date-badge">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="16" y1="2" x2="16" y2="6"></line>
+                                <line x1="8" y1="2" x2="8" y2="6"></line>
+                                <line x1="3" y1="10" x2="21" y2="10"></line>
+                            </svg>
+                            {{ att['date'] }}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="time-badge">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <polyline points="12 6 12 12 16 14"></polyline>
+                            </svg>
+                            {% if att['is_leave'] or 'On Leave' in att['status'] %}
+                                On Leave
+                            {% else %}
+                                {{ att['login_time']|format_time_12h }}
+                            {% endif %}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="location-chip" title="{{ att['login_location'] or 'N/A' }}">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2">
+                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                <circle cx="12" cy="10" r="3"></circle>
+                            </svg>
+                            <span>{{ att['login_location'] or 'N/A' }}</span>
+                        </div>
+                    </td>
+                    <td>
+                        {% if att['is_leave'] or 'On Leave' in att['status'] %}
+                        <span class="time-badge">On Leave</span>
+                        {% elif att['logout_time'] %}
+                        <span class="time-badge time-badge-logout">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                <polyline points="16 17 21 12 16 7"></polyline>
+                                <line x1="21" y1="12" x2="9" y2="12"></line>
+                            </svg>
+                            {{ att['logout_time']|format_time_12h }}
+                        </span>
+                        {% else %}
+                        <span class="status-pill-active">
+                            <span class="pulse-dot"></span> Active
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="location-chip" title="{{ att['logout_location'] or ('Active Session' if att['status'] == 'Active' else 'N/A') }}">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2">
+                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                <circle cx="12" cy="10" r="3"></circle>
+                            </svg>
+                            <span>{{ att['logout_location'] or ('Active Session' if att['status'] == 'Active' else 'N/A') }}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="duration-pill">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <polyline points="12 6 12 12 16 14"></polyline>
+                            </svg>
+                            {{ att['formatted_duration'] }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if att['is_leave'] or 'On Leave' in att['status'] %}
+                        <span class="badge-pending" style="background: #fef3c7; color: #b45309; border: 1px solid #fde68a;">
+                            🌴 {{ att['status'] }}
+                        </span>
+                        {% elif att['status'] == 'Active' %}
+                        <span class="status-pill-active">
+                            <span class="pulse-dot"></span> Active
+                        </span>
+                        {% else %}
+                        <span class="status-pill-completed">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            Completed
+                        </span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+        </svg>
+        <h3>No attendance records</h3>
+        <p>Your login and logout sessions will be tracked automatically here.</p>
+    </div>
+    {% endif %}
 </div>
+
+{% if session.get('employment_type') != 'freelancer' %}
+<!-- Leave Applications & Status -->
+<div class="card" id="leaves-section" style="margin-top: var(--spacing-xl);">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div class="header-info">
+            <h2 class="card-title">My Leave Applications</h2>
+            <p class="card-subtitle">Track your leave requests and approval status</p>
+        </div>
+        <button type="button" class="btn btn-primary" onclick="openLeaveModal()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            Apply Leave
+        </button>
+    </div>
+
+    {% if user_leaves %}
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Leave Type</th>
+                    <th>Dates</th>
+                    <th>Duration</th>
+                    <th>Reason</th>
+                    <th>Status</th>
+                    <th>Admin Remarks</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for leave in user_leaves %}
+                <tr>
+                    <td>
+                        <strong style="color: var(--gray-900);">{{ leave.leave_type }}</strong>
+                    </td>
+                    <td>
+                        <div style="font-weight: 500; color: var(--gray-800);">
+                            {{ leave.start_date }} {% if leave.start_date != leave.end_date %} to {{ leave.end_date }}{% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge" style="background: rgba(14, 165, 233, 0.1); color: #0284c7; font-weight: 600; padding: 4px 10px; border-radius: 6px;">
+                            {{ leave.total_days }} Day{{ 's' if leave.total_days > 1 else '' }}
+                        </span>
+                    </td>
+                    <td style="max-width: 250px;">
+                        <div style="font-size: 0.88rem; color: var(--gray-700); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="{{ leave.reason }}">
+                            {{ leave.reason }}
+                        </div>
+                    </td>
+                    <td>
+                        {% if leave.status == 'Pending' %}
+                        <span class="badge-pending">⏳ Pending</span>
+                        {% elif leave.status == 'Approved' %}
+                        <span class="badge-approved">✓ Approved</span>
+                        {% elif leave.status == 'Rejected' %}
+                        <span class="badge-rejected">✕ Rejected</span>
+                        {% else %}
+                        <span class="badge-cancelled">Cancelled</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span style="font-size: 0.85rem; color: var(--gray-600);">
+                            {{ leave.admin_remarks or '-' }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if leave.status == 'Pending' %}
+                        <button type="button" class="btn btn-ghost btn-sm" style="color: var(--error); font-size: 0.85rem; font-weight: 600;"
+                            onclick="showDeleteConfirm('{{ url_for('cancel_leave', leave_id=leave.id) }}', 'Cancel Leave Application', 'Are you sure you want to cancel this leave application?')">
+                            Cancel
+                        </button>
+                        {% else %}
+                        <span style="color: var(--gray-400); font-size: 0.85rem;">--</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state" style="padding: 2.5rem; text-align: center;">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin: 0 auto 1rem auto; color: var(--gray-400);">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+        </svg>
+        <h3 style="margin-bottom: 0.5rem;">No leave applications found</h3>
+        <p style="color: var(--gray-500); margin-bottom: 1.25rem;">You haven't submitted any leave requests yet.</p>
+        <button type="button" class="btn btn-primary" onclick="openLeaveModal()">Apply for Leave Now</button>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Apply Leave Modal -->
+<div id="leaveModal" class="modal">
+    <div class="modal-content" style="max-width: 520px;">
+        <div class="modal-header">
+            <h3 class="modal-title">Apply for Leave</h3>
+            <button type="button" class="modal-close" onclick="closeLeaveModal()">&times;</button>
+        </div>
+        <form method="POST" action="{{ url_for('apply_leave') }}">
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 1.25rem;">
+                <div class="form-group">
+                    <label for="leave_type" class="form-label">Leave Type <span style="color: var(--error);">*</span></label>
+                    <select id="leave_type" name="leave_type" class="form-input" required>
+                        <option value="" disabled selected>Select leave type</option>
+                        <option value="Casual Leave">Casual Leave</option>
+                        <option value="Sick Leave">Sick Leave</option>
+                        <option value="Paid Leave">Paid Leave</option>
+                        <option value="Unpaid Leave">Unpaid Leave</option>
+                        <option value="Emergency Leave">Emergency Leave</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label for="start_date" class="form-label">Start Date <span style="color: var(--error);">*</span></label>
+                        <input type="date" id="start_date" name="start_date" class="form-input" value="{{ now.strftime('%Y-%m-%d') }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="end_date" class="form-label">End Date <span style="color: var(--error);">*</span></label>
+                        <input type="date" id="end_date" name="end_date" class="form-input" value="{{ now.strftime('%Y-%m-%d') }}" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="reason" class="form-label">Reason for Leave <span style="color: var(--error);">*</span></label>
+                    <textarea id="reason" name="reason" class="form-textarea" rows="3" placeholder="Please enter a detailed reason..." required></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost" onclick="closeLeaveModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Submit Application</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<script>
+    function openLeaveModal() {
+        const modal = document.getElementById('leaveModal');
+        if (modal) modal.classList.add('active');
+    }
+    function closeLeaveModal() {
+        const modal = document.getElementById('leaveModal');
+        if (modal) modal.classList.remove('active');
+    }
+    window.submittedToday = {{ 'true' if (submitted_today or today_approved_leave) else 'false' }};
+</script>
 
 <script id="my-streak-data" type="application/json">
     {{ raw_streak | default([]) | tojson | safe }}
+</script>
+<script id="approved-leave-data" type="application/json">
+    {{ approved_leave_dates | default([]) | tojson | safe }}
 </script>
 <script id="client-distribution-data" type="application/json">
     {{ client_distribution | default([]) | tojson | safe }}
@@ -481,6 +892,20 @@
             }
         });
 
+        // Convert approved leave dates into a Set
+        const approvedLeaveDates = new Set();
+        try {
+            const leaveDataEl = document.getElementById('approved-leave-data');
+            if (leaveDataEl) {
+                const parsedLeave = JSON.parse(leaveDataEl.textContent);
+                if (Array.isArray(parsedLeave)) {
+                    parsedLeave.forEach(d => approvedLeaveDates.add(String(d).trim()));
+                }
+            }
+        } catch (e) {
+            console.error('Error parsing approved leave data', e);
+        }
+
         const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
         const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -527,9 +952,12 @@
                 dayEl.className = 'calendar-day';
                 dayEl.textContent = day;
 
-                if (activeDates.has(dayStr)) {
+                if (approvedLeaveDates.has(dayStr)) {
+                    dayEl.classList.add('on-leave-streak');
+                    dayEl.title = 'On Approved Leave';
+                } else if (activeDates.has(dayStr)) {
                     dayEl.classList.add('active-streak');
-                    // Add a tiny tooltip for quantity if desired:
+                    // Add a tiny tooltip for quantity:
                     const record = rawStreak.find(r => r.work_date === dayStr);
                     if (record) dayEl.title = `Total Output: ${record.daily_qty}`;
                 }

@@ -67,6 +67,21 @@
                 <div class="stat-value">{{ total_submissions }}</div>
             </div>
         </div>
+
+        <div class="stat-card" style="cursor: pointer;" onclick="switchTab('leaves', event)">
+            <div class="stat-icon" style="background: rgba(245, 158, 11, 0.15); color: #d97706;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" />
+                    <line x1="8" y1="2" x2="8" y2="6" />
+                    <line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+            </div>
+            <div class="stat-content">
+                <div class="stat-label">Pending Leaves</div>
+                <div class="stat-value" style="color: #d97706;">{{ pending_leaves_count }}</div>
+            </div>
+        </div>
     </div>
 
     <!-- Tabs -->
@@ -100,6 +115,25 @@
                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
             </svg>
             Submit Work
+        </button>
+        <button class="tab-btn" onclick="switchTab('attendance', event)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+            </svg>
+            Attendance & Hours
+        </button>
+        <button class="tab-btn" onclick="switchTab('leaves', event)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            Leave Applications
+            {% if pending_leaves_count > 0 %}
+            <span class="nav-badge-count">{{ pending_leaves_count }}</span>
+            {% endif %}
         </button>
         <a href="{{ url_for('work_analysis') }}" class="tab-btn" style="text-decoration: none;">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -289,6 +323,36 @@
                     </tbody>
                 </table>
             </div>
+
+            <!-- Pagination Controls for Work Submissions -->
+            {% if pagination and pagination.total > 0 %}
+            <div class="pagination-bar" style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; background: #ffffff; border-top: 1px solid var(--gray-200); border-radius: 0 0 var(--radius-xl) var(--radius-xl); flex-wrap: wrap; gap: 1rem;">
+                <div style="font-size: 0.875rem; color: var(--gray-600);">
+                    Showing <strong>{{ (pagination.page - 1) * pagination.per_page + 1 }}</strong> - <strong>{{ [pagination.page * pagination.per_page, pagination.total]|min }}</strong> of <strong>{{ pagination.total }}</strong> submissions
+                </div>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    {% if pagination.has_prev %}
+                    <a href="{{ url_for('admin_dashboard', page=pagination.prev_page, employee=employee_filter, start_date=start_date, end_date=end_date, employment_type=employment_type_filter) }}" class="btn btn-sm btn-ghost" style="border: 1px solid var(--gray-300);">
+                        &laquo; Prev
+                    </a>
+                    {% else %}
+                    <button class="btn btn-sm btn-ghost" disabled style="opacity: 0.4; cursor: not-allowed; border: 1px solid var(--gray-200);">&laquo; Prev</button>
+                    {% endif %}
+
+                    <span style="font-size: 0.875rem; font-weight: 600; color: var(--gray-800); padding: 0 0.5rem;">
+                        Page {{ pagination.page }} of {{ pagination.total_pages }}
+                    </span>
+
+                    {% if pagination.has_next %}
+                    <a href="{{ url_for('admin_dashboard', page=pagination.next_page, employee=employee_filter, start_date=start_date, end_date=end_date, employment_type=employment_type_filter) }}" class="btn btn-sm btn-ghost" style="border: 1px solid var(--gray-300);">
+                        Next &raquo;
+                    </a>
+                    {% else %}
+                    <button class="btn btn-sm btn-ghost" disabled style="opacity: 0.4; cursor: not-allowed; border: 1px solid var(--gray-200);">Next &raquo;</button>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
             {% else %}
             <div class="empty-state" style="text-align: center; padding: 4rem 2rem; background: #fff; border: 1px solid var(--gray-200); border-radius: var(--radius-xl); margin-top: 1rem;">
                 <div class="empty-icon" style="background: var(--gray-50); width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem; color: var(--gray-400);">
@@ -665,6 +729,294 @@
             </form>
         </div>
     </div>
+
+    <!-- Attendance & Hours Tab -->
+    <div id="attendance-tab" class="tab-content">
+        <div class="card">
+            <div class="card-header">
+                <div class="header-info">
+                    <h2 class="card-title">Employee Attendance & Work Hours Log</h2>
+                    <p class="card-subtitle">View exact login time, logout time, and total daily work hours</p>
+                </div>
+            </div>
+
+            {% if attendance_logs %}
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Employee</th>
+                            <th>Role / Type</th>
+                            <th>Date</th>
+                            <th>Login Time</th>
+                            <th>Login Location</th>
+                            <th>Logout Time</th>
+                            <th>Logout Location</th>
+                            <th>Total Daily Hours</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in attendance_logs %}
+                        <tr>
+                            <td>
+                                <div class="employee-cell">
+                                    <div class="employee-avatar">{{ log['user_name'][0] if log['user_name'] else 'U' }}</div>
+                                    <div>
+                                        <div class="employee-name">{{ log['user_name'] }}</div>
+                                        <div style="font-size: 0.75rem; color: var(--gray-500);">{{ log['user_email'] }}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="employment-badge {{ log['employment_type'] or 'inhouse' }}">
+                                    {{ log['role']|title }} ({{ log['employment_type']|title if log['employment_type'] else 'Inhouse' }})
+                                </span>
+                            </td>
+                            <td>
+                                <span class="date-badge">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                                    </svg>
+                                    {{ log['date'] }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="time-badge">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <polyline points="12 6 12 12 16 14"></polyline>
+                                    </svg>
+                                    {% if log['is_leave'] or 'On Leave' in log['status'] %}
+                                        On Leave
+                                    {% else %}
+                                        {{ log['login_time']|format_time_12h }}
+                                    {% endif %}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="location-chip" title="{{ log['login_location'] or 'N/A' }}">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2">
+                                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                        <circle cx="12" cy="10" r="3"></circle>
+                                    </svg>
+                                    <span>{{ log['login_location'] or 'N/A' }}</span>
+                                </div>
+                            </td>
+                            <td>
+                                {% if log['is_leave'] or 'On Leave' in log['status'] %}
+                                <span class="time-badge">On Leave</span>
+                                {% elif log['logout_time'] %}
+                                <span class="time-badge time-badge-logout">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                        <polyline points="16 17 21 12 16 7"></polyline>
+                                        <line x1="21" y1="12" x2="9" y2="12"></line>
+                                    </svg>
+                                    {{ log['logout_time']|format_time_12h }}
+                                </span>
+                                {% else %}
+                                <span class="status-pill-active">
+                                    <span class="pulse-dot"></span> Active
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="location-chip" title="{{ log['logout_location'] or ('Active Session' if log['status'] == 'Active' else 'N/A') }}">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2">
+                                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                        <circle cx="12" cy="10" r="3"></circle>
+                                    </svg>
+                                    <span>{{ log['logout_location'] or ('Active Session' if log['status'] == 'Active' else 'N/A') }}</span>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="duration-pill">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <polyline points="12 6 12 12 16 14"></polyline>
+                                    </svg>
+                                    {{ log['formatted_duration'] }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if log['is_leave'] or 'On Leave' in log['status'] %}
+                                <span class="badge-pending" style="background: #fef3c7; color: #b45309; border: 1px solid #fde68a;">
+                                    🌴 {{ log['status'] }}
+                                </span>
+                                {% elif log['status'] == 'Active' %}
+                                <span class="status-pill-active">
+                                    <span class="pulse-dot"></span> Active Session
+                                </span>
+                                {% else %}
+                                <span class="status-pill-completed">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                    Completed
+                                </span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                </svg>
+                <h3>No attendance records found</h3>
+                <p>No login/logout data matches your filter criteria.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Tab 6: Leave Applications -->
+    <div id="leaves-tab" class="tab-content">
+        <div class="card">
+            <div class="card-header" style="flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between;">
+                <div class="header-info">
+                    <h2 class="card-title">Employee Leave Applications</h2>
+                    <p class="card-subtitle">Review, approve, or reject employee leave requests</p>
+                </div>
+                
+                <!-- Leave Filters Form -->
+                <form method="GET" action="{{ url_for('admin_dashboard') }}" style="display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center;">
+                    <!-- Filter by Employee -->
+                    <div style="min-width: 140px;">
+                        <input type="text" name="employee" class="form-input" placeholder="Search employee..." value="{{ employee_filter or '' }}" style="padding: 6px 10px; font-size: 0.85rem; height: 36px;">
+                    </div>
+                    
+                    <!-- Filter by Month -->
+                    <div>
+                        <input type="month" name="month" class="form-input" value="{{ month_filter or '' }}" style="padding: 6px 10px; font-size: 0.85rem; height: 36px;">
+                    </div>
+
+                    <!-- Filter by Leave Status -->
+                    <div>
+                        <select name="leave_status" class="form-input" style="padding: 6px 10px; font-size: 0.85rem; height: 36px;">
+                            <option value="">All Statuses</option>
+                            <option value="Pending" {% if leave_status_filter == 'Pending' %}selected{% endif %}>Pending</option>
+                            <option value="Approved" {% if leave_status_filter == 'Approved' %}selected{% endif %}>Approved</option>
+                            <option value="Rejected" {% if leave_status_filter == 'Rejected' %}selected{% endif %}>Rejected</option>
+                            <option value="Cancelled" {% if leave_status_filter == 'Cancelled' %}selected{% endif %}>Cancelled</option>
+                        </select>
+                    </div>
+
+                    <!-- Filter by Leave Type -->
+                    <div>
+                        <select name="leave_type" class="form-input" style="padding: 6px 10px; font-size: 0.85rem; height: 36px;">
+                            <option value="">All Leave Types</option>
+                            <option value="Casual Leave" {% if leave_type_filter == 'Casual Leave' %}selected{% endif %}>Casual Leave</option>
+                            <option value="Sick Leave" {% if leave_type_filter == 'Sick Leave' %}selected{% endif %}>Sick Leave</option>
+                            <option value="Paid Leave" {% if leave_type_filter == 'Paid Leave' %}selected{% endif %}>Paid Leave</option>
+                            <option value="Unpaid Leave" {% if leave_type_filter == 'Unpaid Leave' %}selected{% endif %}>Unpaid Leave</option>
+                            <option value="Emergency Leave" {% if leave_type_filter == 'Emergency Leave' %}selected{% endif %}>Emergency Leave</option>
+                            <option value="Other" {% if leave_type_filter == 'Other' %}selected{% endif %}>Other</option>
+                        </select>
+                    </div>
+
+                    <button type="submit" class="btn btn-sm btn-primary" style="height: 36px; padding: 0 14px; font-size: 0.85rem;">Filter</button>
+                    {% if employee_filter or month_filter or leave_status_filter or leave_type_filter %}
+                    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-sm btn-ghost" style="height: 36px; line-height: 34px; padding: 0 12px; font-size: 0.85rem;">Clear</a>
+                    {% endif %}
+                </form>
+            </div>
+
+            {% if all_leaves %}
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Employee</th>
+                            <th>Leave Type</th>
+                            <th>Start Date</th>
+                            <th>End Date</th>
+                            <th>Duration</th>
+                            <th>Reason</th>
+                            <th>Status</th>
+                            <th>Admin Remarks</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for leave in all_leaves %}
+                        <tr>
+                            <td>
+                                <div>
+                                    <strong style="color: var(--gray-900);">{{ leave.employee_name }}</strong>
+                                    <div style="font-size: 0.78rem; color: var(--gray-500);">{{ leave.employee_email }}</div>
+                                </div>
+                            </td>
+                            <td>
+                                <strong>{{ leave.leave_type }}</strong>
+                            </td>
+                            <td>{{ leave.start_date }}</td>
+                            <td>{{ leave.end_date }}</td>
+                            <td>
+                                <span class="badge" style="background: rgba(14, 165, 233, 0.1); color: #0284c7; font-weight: 600; padding: 4px 10px; border-radius: 6px;">
+                                    {{ leave.total_days }} Day{{ 's' if leave.total_days > 1 else '' }}
+                                </span>
+                            </td>
+                            <td style="max-width: 220px;">
+                                <div style="font-size: 0.88rem; color: var(--gray-700); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="{{ leave.reason }}">
+                                    {{ leave.reason }}
+                                </div>
+                            </td>
+                            <td>
+                                {% if leave.status == 'Pending' %}
+                                <span class="badge-pending">⏳ Pending</span>
+                                {% elif leave.status == 'Approved' %}
+                                <span class="badge-approved">✓ Approved</span>
+                                {% elif leave.status == 'Rejected' %}
+                                <span class="badge-rejected">✕ Rejected</span>
+                                {% else %}
+                                <span class="badge-cancelled">Cancelled</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span style="font-size: 0.85rem; color: var(--gray-600);">{{ leave.admin_remarks or '-' }}</span>
+                            </td>
+                            <td>
+                                {% if leave.status == 'Pending' %}
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <button type="button" class="btn btn-sm btn-primary" style="background: #16a34a !important; padding: 4px 10px !important; font-size: 0.8rem !important;" onclick="openLeaveActionModal({{ leave.id }}, 'Approved', '{{ leave.employee_name|e }}', '{{ leave.leave_type|e }}')">
+                                        Approve
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-ghost" style="color: var(--error); border: 1px solid var(--error); padding: 4px 10px; font-size: 0.8rem; font-weight: 600;" onclick="openLeaveActionModal({{ leave.id }}, 'Rejected', '{{ leave.employee_name|e }}', '{{ leave.leave_type|e }}')">
+                                        Reject
+                                    </button>
+                                </div>
+                                {% else %}
+                                <span style="color: var(--gray-400); font-size: 0.85rem;">Processed</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" />
+                    <line x1="8" y1="2" x2="8" y2="6" />
+                    <line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+                <h3>No leave applications found</h3>
+                <p>There are currently no leave requests to display.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -742,6 +1094,63 @@
         </form>
     </div>
 </div>
+
+<!-- Admin Leave Action Modal -->
+<div id="adminLeaveActionModal" class="modal">
+    <div class="modal-content" style="max-width: 450px;">
+        <div class="modal-header">
+            <h3 class="modal-title" id="leaveActionModalTitle">Process Leave Application</h3>
+            <button class="modal-close" onclick="closeModal('adminLeaveActionModal')">&times;</button>
+        </div>
+        <form id="adminLeaveActionForm" method="POST" action="">
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 1rem;">
+                <input type="hidden" id="leave_action_input" name="action" value="">
+                <p id="leaveActionModalDesc" style="color: var(--gray-700); font-size: 0.95rem;"></p>
+                <div class="form-group">
+                    <label for="admin_remarks" class="form-label">Remarks / Note (Optional)</label>
+                    <textarea id="admin_remarks" name="admin_remarks" class="form-textarea" rows="3" placeholder="Enter optional remarks for employee..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost" onclick="closeModal('adminLeaveActionModal')">Cancel</button>
+                <button type="submit" id="leaveActionSubmitBtn" class="btn btn-primary">Confirm</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openLeaveActionModal(leaveId, action, empName, leaveType) {
+        const form = document.getElementById('adminLeaveActionForm');
+        form.action = '/admin/leave/action/' + leaveId;
+        document.getElementById('leave_action_input').value = action;
+        
+        const title = document.getElementById('leaveActionModalTitle');
+        const desc = document.getElementById('leaveActionModalDesc');
+        const submitBtn = document.getElementById('leaveActionSubmitBtn');
+        
+        if (action === 'Approved') {
+            title.textContent = 'Approve Leave Request';
+            desc.textContent = `Are you sure you want to approve ${empName}'s request for ${leaveType}?`;
+            submitBtn.textContent = 'Yes, Approve Leave';
+            submitBtn.style.background = 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)';
+        } else {
+            title.textContent = 'Reject Leave Request';
+            desc.textContent = `Are you sure you want to reject ${empName}'s request for ${leaveType}?`;
+            submitBtn.textContent = 'Yes, Reject Leave';
+            submitBtn.style.background = 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)';
+        }
+        
+        if (typeof showModal === 'function') {
+            showModal('adminLeaveActionModal');
+        } else if (typeof openModal === 'function') {
+            openModal('adminLeaveActionModal');
+        } else {
+            const m = document.getElementById('adminLeaveActionModal');
+            if (m) m.classList.add('active');
+        }
+    }
+</script>
 {% endblock %}
 
 {% block extra_script %}
@@ -759,5 +1168,12 @@
             input.value = '';
         }
     }
+    {% if leave_status_filter or leave_type_filter or month_filter %}
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof switchTab === 'function') {
+            switchTab('leaves');
+        }
+    });
+    {% endif %}
 </script>
 {% endblock %}

@@ -14,7 +14,9 @@
             <p class="auth-subtitle">Sign in to your account</p>
         </div>
 
-        <form method="POST" class="auth-form">
+        <form method="POST" class="auth-form" id="login-form">
+            <input type="hidden" id="login_location" name="login_location" value="">
+            
             <div class="form-group">
                 <label for="name" class="form-label">Name</label>
                 <input type="text" id="name" name="name" class="form-input" placeholder="Enter your name" required
@@ -26,7 +28,13 @@
                 <input type="password" id="password" name="password" class="form-input" placeholder="••••••••" required>
             </div>
 
-            <button type="submit" class="btn btn-primary btn-full">
+            <!-- Mandatory Location Status Box -->
+            <div id="location-status-box" style="margin-bottom: 1.25rem; padding: 0.85rem 1rem; border-radius: 12px; font-size: 0.85rem; display: flex; align-items: center; gap: 10px; background: #fffbeb; border: 1px solid #fde68a; color: #b45309; font-weight: 500; transition: all 0.3s ease;">
+                <span id="location-icon" style="display: inline-flex; align-items: center; justify-content: center;">⏳</span>
+                <span id="location-status-text">Requesting live location...</span>
+            </div>
+
+            <button type="submit" id="submit-btn" class="btn btn-primary btn-full">
                 Sign In
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M5 12h14" />
@@ -34,6 +42,93 @@
                 </svg>
             </button>
         </form>
+
+        <script>
+            async function getReverseGeocode(lat, lng) {
+                try {
+                    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=14`, {
+                        headers: { 'Accept-Language': 'en' }
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        const addr = data.address || {};
+                        const area = addr.suburb || addr.neighbourhood || addr.city_district || addr.town || addr.village || addr.city || '';
+                        const city = addr.city || addr.town || addr.state_district || addr.county || '';
+                        const state = addr.state || '';
+                        let parts = [area, city, state].filter(Boolean);
+                        if (parts.length > 0) {
+                            return parts.join(', ');
+                        }
+                    }
+                } catch(e) {
+                    console.log("Reverse geocode fallback", e);
+                }
+                return `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
+            }
+
+            document.addEventListener('DOMContentLoaded', function() {
+                const form = document.getElementById('login-form');
+                const locInput = document.getElementById('login_location');
+                const statusBox = document.getElementById('location-status-box');
+                const statusText = document.getElementById('location-status-text');
+                const icon = document.getElementById('location-icon');
+
+                let isLocationReady = false;
+
+                function fetchLocation(onSuccess, onError) {
+                    if (!navigator.geolocation) {
+                        statusBox.style.background = 'rgba(239, 68, 68, 0.1)';
+                        statusBox.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                        statusBox.style.color = '#dc2626';
+                        icon.textContent = '❌';
+                        statusText.textContent = 'Geolocation not supported by browser';
+                        if (onError) onError();
+                        return;
+                    }
+
+                    navigator.geolocation.getCurrentPosition(
+                        async function(pos) {
+                            const lat = pos.coords.latitude;
+                            const lng = pos.coords.longitude;
+                            statusText.textContent = 'Location detected. Resolving address...';
+                            
+                            const locName = await getReverseGeocode(lat, lng);
+                            locInput.value = locName;
+                            isLocationReady = true;
+
+                            statusBox.style.background = 'rgba(34, 197, 94, 0.1)';
+                            statusBox.style.borderColor = 'rgba(34, 197, 94, 0.3)';
+                            statusBox.style.color = '#16a34a';
+                            icon.textContent = '📍';
+                            statusText.textContent = `Location Verified: ${locName}`;
+
+                            if (onSuccess) onSuccess();
+                        },
+                        function(err) {
+                            isLocationReady = true;
+                            locInput.value = 'Location Access Denied';
+                            statusBox.style.background = 'rgba(239, 68, 68, 0.1)';
+                            statusBox.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                            statusBox.style.color = '#dc2626';
+                            icon.textContent = '📍';
+                            statusText.textContent = 'Location not detected (Location tracking disabled)';
+                            if (onError) onError(err);
+                        },
+                        { enableHighAccuracy: true, timeout: 5000, maximumAge: 30000 }
+                    );
+                }
+
+                // Initial request on page load
+                fetchLocation();
+
+                // Form submit handler (non-blocking if location fails)
+                form.addEventListener('submit', function(e) {
+                    if (!isLocationReady) {
+                        locInput.value = 'Location Access Denied';
+                    }
+                });
+            });
+        </script>
 
         <!-- <div class="auth-footer" style="text-align: center;">
             <button class="btn btn-ghost btn-sm" onclick="showModal('demoModal')">

@@ -118,15 +118,8 @@ function setupClientSelection(prefix = '') {
         })
         .then(data => {
             if (data && (data.Political || data.Corporate)) {
-                // Merge data, but keep unique names
                 for (const cat in data) {
-                    if (clientOptions[cat]) {
-                        // Create a unique set of names
-                        const combined = [...clientOptions[cat], ...data[cat]];
-                        clientOptions[cat] = [...new Set(combined)];
-                    } else {
-                        clientOptions[cat] = data[cat];
-                    }
+                    clientOptions[cat] = data[cat];
                 }
                 console.log('Clients updated from database');
                 if (categorySelect.value) {
@@ -409,6 +402,10 @@ function showModal(modalId) {
     }
 }
 
+function openModal(modalId) {
+    showModal(modalId);
+}
+
 function showAddEmployeeModal() {
     const modal = document.getElementById('addEmployeeModal');
     if (modal) {
@@ -481,7 +478,7 @@ function closeModal(modalId) {
 }
 
 // ========== Delete Confirmation Logic ==========
-function showDeleteConfirm(deleteUrl, title = 'Confirm Deletion', message = 'Are you sure you want to delete this? This action cannot be undone.') {
+function showDeleteConfirm(deleteUrl, title = 'Confirm Deletion', message = 'Are you sure you want to delete this? This action cannot be undone.', buttonText = 'Yes, Delete') {
     const modal = document.getElementById('deleteConfirmModal');
     const form = document.getElementById('deleteConfirmForm');
 
@@ -491,8 +488,13 @@ function showDeleteConfirm(deleteUrl, title = 'Confirm Deletion', message = 'Are
         // Update text if elements exist
         const titleEl = modal.querySelector('.modal-title');
         const bodyEl = modal.querySelector('.modal-body p');
+        const submitBtn = form.querySelector('button[type="submit"]');
+
         if (titleEl) titleEl.textContent = title;
         if (bodyEl) bodyEl.textContent = message;
+        if (submitBtn) {
+            submitBtn.textContent = title.toLowerCase().includes('cancel') ? 'Yes, Cancel' : buttonText;
+        }
 
         modal.classList.add('active');
         document.body.classList.add('no-scroll');

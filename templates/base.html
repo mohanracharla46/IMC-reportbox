@@ -83,6 +83,17 @@
                         Work Analysis 
                     </a> -->
                     {% endif %}
+                    {% if session.role == 'employee' and session.get('employment_type') != 'freelancer' %}
+                    <button type="button" class="btn btn-ghost" onclick="if(typeof openLeaveModal === 'function'){ openLeaveModal(); } else { window.location.href='{{ url_for('employee_dashboard') }}#leaves-section'; }">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                        </svg>
+                        Apply Leave
+                    </button>
+                    {% endif %}
                     <a href="{{ url_for('profile') }}" class="btn btn-ghost">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2">
@@ -91,7 +102,7 @@
                         </svg>
                         Profile
                     </a>
-                    <a href="{{ url_for('logout') }}" class="btn btn-ghost">
+                    <a href="{{ url_for('logout') }}" class="btn btn-ghost" onclick="handleLogoutWithLocation(event, '{{ url_for('logout') }}')">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2">
                             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -104,12 +115,92 @@
             </div>
         </div>
     </nav>
+    <script>
+        async function getReverseGeocodeLogout(lat, lng) {
+            try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=14`, {
+                    headers: { 'Accept-Language': 'en' }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    const addr = data.address || {};
+                    const area = addr.suburb || addr.neighbourhood || addr.city_district || addr.town || addr.village || addr.city || '';
+                    const city = addr.city || addr.town || addr.state_district || addr.county || '';
+                    const state = addr.state || '';
+                    let parts = [area, city, state].filter(Boolean);
+                    if (parts.length > 0) {
+                        return parts.join(', ');
+                    }
+                }
+            } catch(e) {
+                console.log("Reverse geocode fallback", e);
+            }
+            return `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
+        }
+
+        function handleLogoutWithLocation(e, logoutUrl) {
+            e.preventDefault();
+            
+            // Check mandatory report submission requirement for employees
+            if (typeof window.submittedToday !== 'undefined' && window.submittedToday === false) {
+                if (typeof showModal === 'function') {
+                    showModal('uploadTaskModal');
+                } else {
+                    const m = document.getElementById('uploadTaskModal');
+                    if (m) m.classList.add('active');
+                    else alert('please upload today tasks');
+                }
+                return;
+            }
+
+            if (!navigator.geolocation) {
+                alert('Location Access Error: Browser does not support geolocation.');
+                return;
+            }
+
+            // Visual feedback indicator during logout location resolution
+            const btn = e.currentTarget;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳ Fetching Location...';
+            btn.style.pointerEvents = 'none';
+
+            navigator.geolocation.getCurrentPosition(
+                async function(pos) {
+                    const lat = pos.coords.latitude;
+                    const lng = pos.coords.longitude;
+                    const locName = await getReverseGeocodeLogout(lat, lng);
+                    window.location.href = logoutUrl + '?location=' + encodeURIComponent(locName);
+                },
+                function(err) {
+                    btn.innerHTML = originalText;
+                    btn.style.pointerEvents = 'auto';
+                    alert('Location permission is required to logout and record your shift end.');
+                },
+                { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+            );
+        }
+    </script>
     {% endif %}
 
     <!-- Main Content -->
     <main class="main-content fade-in">
         {% block content %}{% endblock %}
     </main>
+
+    <!-- Upload Today Tasks Requirement Modal Popup -->
+    <div id="uploadTaskModal" class="modal">
+        <div class="modal-content" style="max-width: 400px; text-align: center; padding: 2.25rem 1.5rem;">
+            <div style="width: 56px; height: 56px; background: rgba(239, 68, 68, 0.12); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.25rem auto; color: var(--error);">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+            </div>
+            <h3 style="margin-bottom: 1.5rem; font-size: 1.25rem; font-weight: 700; color: var(--gray-900);">please upload today tasks</h3>
+            <button type="button" class="btn btn-primary btn-full" style="padding: 10px 0; font-weight: 600;" onclick="closeModal('uploadTaskModal')">OK</button>
+        </div>
+    </div>
 
     <!-- Global Delete Selection Modal -->
     <div id="deleteConfirmModal" class="modal">

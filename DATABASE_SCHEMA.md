@@ -37,9 +37,57 @@ The Work Report System uses SQLite as its database engine. The database consists
 │                                  │
 │ UNIQUE(user_id, date)           │
 └─────────────────────────────────┘
+          │
+          │ 1
+          │
+          │ has many
+          │
+          │ N
+          ▼
+┌─────────────────────────────────┐
+│        ATTENDANCE               │
+├─────────────────────────────────┤
+│ id (PK)          INTEGER        │
+│ user_id (FK)     INTEGER        │
+│ date             DATE            │
+│ login_time       TIMESTAMP      │
+│ logout_time      TIMESTAMP (null)│
+│ total_hours      REAL           │
+│ status           TEXT           │
+└─────────────────────────────────┘
 ```
 
 ## Table Specifications
+
+### Leaves Table
+
+**Purpose**: Stores leave applications submitted by employees, approval statuses, and admin remarks.
+
+| Column        | Type      | Constraints                     | Description                                          |
+|---------------|-----------|---------------------------------|------------------------------------------------------|
+| id            | INTEGER   | PRIMARY KEY, AUTOINCREMENT      | Unique leave record identifier                      |
+| user_id       | INTEGER   | NOT NULL, FOREIGN KEY           | Reference to users table                            |
+| leave_type    | TEXT      | NOT NULL                        | E.g. 'Casual Leave', 'Sick Leave', 'Paid Leave'      |
+| start_date    | DATE      | NOT NULL                        | Leave start date (YYYY-MM-DD)                        |
+| end_date      | DATE      | NOT NULL                        | Leave end date (YYYY-MM-DD)                          |
+| reason        | TEXT      | NOT NULL                        | Explanation/reason for leave request                 |
+| status        | TEXT      | DEFAULT 'Pending'               | 'Pending', 'Approved', 'Rejected', or 'Cancelled'    |
+| admin_remarks | TEXT      | NULL                            | Remarks added by Admin upon approval/rejection       |
+| created_at    | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP      | Timestamp when leave application was created         |
+
+### Attendance Table
+
+**Purpose**: Stores login/logout timestamps and daily work hours for employees.
+
+| Column      | Type      | Constraints                     | Description                          |
+|-------------|-----------|---------------------------------|--------------------------------------|
+| id          | INTEGER   | PRIMARY KEY, AUTOINCREMENT      | Unique attendance record identifier |
+| user_id     | INTEGER   | NOT NULL, FOREIGN KEY           | Reference to users table             |
+| date        | DATE      | NOT NULL                        | Date of login session (YYYY-MM-DD)   |
+| login_time  | TIMESTAMP | NOT NULL                        | Exact timestamp when user logged in  |
+| logout_time | TIMESTAMP | NULL                            | Exact timestamp when user logged out |
+| total_hours | REAL      | DEFAULT 0                       | Computed total hours of work         |
+| status      | TEXT      | DEFAULT 'Active'                | 'Active' or 'Completed'              |
 
 ### Users Table
 
