@@ -772,61 +772,22 @@
     {% endif %}
 </div>
 
-<!-- Apply Leave Modal -->
-<div id="leaveModal" class="modal">
-    <div class="modal-content" style="max-width: 520px;">
-        <div class="modal-header">
-            <h3 class="modal-title">Apply for Leave</h3>
-            <button type="button" class="modal-close" onclick="closeLeaveModal()">&times;</button>
-        </div>
-        <form method="POST" action="{{ url_for('apply_leave') }}">
-            <div class="modal-body" style="display: flex; flex-direction: column; gap: 1.25rem;">
-                <div class="form-group">
-                    <label for="leave_type" class="form-label">Leave Type <span style="color: var(--error);">*</span></label>
-                    <select id="leave_type" name="leave_type" class="form-input" required>
-                        <option value="" disabled selected>Select leave type</option>
-                        <option value="Casual Leave">Casual Leave</option>
-                        <option value="Sick Leave">Sick Leave</option>
-                        <option value="Paid Leave">Paid Leave</option>
-                        <option value="Unpaid Leave">Unpaid Leave</option>
-                        <option value="Emergency Leave">Emergency Leave</option>
-                        <option value="Other">Other</option>
-                    </select>
-                </div>
-
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                    <div class="form-group">
-                        <label for="start_date" class="form-label">Start Date <span style="color: var(--error);">*</span></label>
-                        <input type="date" id="start_date" name="start_date" class="form-input" value="{{ now.strftime('%Y-%m-%d') }}" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="end_date" class="form-label">End Date <span style="color: var(--error);">*</span></label>
-                        <input type="date" id="end_date" name="end_date" class="form-input" value="{{ now.strftime('%Y-%m-%d') }}" required>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label for="reason" class="form-label">Reason for Leave <span style="color: var(--error);">*</span></label>
-                    <textarea id="reason" name="reason" class="form-textarea" rows="3" placeholder="Please enter a detailed reason..." required></textarea>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-ghost" onclick="closeLeaveModal()">Cancel</button>
-                <button type="submit" class="btn btn-primary">Submit Application</button>
-            </div>
-        </form>
-    </div>
-</div>
-{% endif %}
-
 <script>
     function openLeaveModal() {
-        const modal = document.getElementById('leaveModal');
-        if (modal) modal.classList.add('active');
+        if (typeof showModal === 'function') {
+            showModal('leaveModal');
+        } else {
+            const modal = document.getElementById('leaveModal');
+            if (modal) modal.classList.add('active');
+        }
     }
     function closeLeaveModal() {
-        const modal = document.getElementById('leaveModal');
-        if (modal) modal.classList.remove('active');
+        if (typeof closeModal === 'function') {
+            closeModal('leaveModal');
+        } else {
+            const modal = document.getElementById('leaveModal');
+            if (modal) modal.classList.remove('active');
+        }
     }
     window.submittedToday = {{ 'true' if (submitted_today or today_approved_leave) else 'false' }};
 </script>
@@ -1075,4 +1036,54 @@
         }
     });
 </script>
+{% endblock %}
+
+{% block modals %}
+{% if session.get('employment_type') != 'freelancer' %}
+<!-- Apply Leave Modal -->
+<div id="leaveModal" class="modal">
+    <div class="modal-content" style="max-width: 520px;">
+        <div class="modal-header">
+            <h3 class="modal-title">Apply for Leave</h3>
+            <button type="button" class="modal-close" onclick="closeLeaveModal()">&times;</button>
+        </div>
+        <form method="POST" action="{{ url_for('apply_leave') }}">
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 1.25rem;">
+                <div class="form-group">
+                    <label for="leave_type" class="form-label">Leave Type <span style="color: var(--error);">*</span></label>
+                    <select id="leave_type" name="leave_type" class="form-input" required>
+                        <option value="" disabled selected>Select leave type</option>
+                        <option value="Casual Leave">Casual Leave</option>
+                        <option value="Sick Leave">Sick Leave</option>
+                        <option value="Paid Leave">Paid Leave</option>
+                        <option value="Unpaid Leave">Unpaid Leave</option>
+                        <option value="Emergency Leave">Emergency Leave</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label for="start_date" class="form-label">Start Date <span style="color: var(--error);">*</span></label>
+                        <input type="date" id="start_date" name="start_date" class="form-input" value="{{ now.strftime('%Y-%m-%d') }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="end_date" class="form-label">End Date <span style="color: var(--error);">*</span></label>
+                        <input type="date" id="end_date" name="end_date" class="form-input" value="{{ now.strftime('%Y-%m-%d') }}" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="reason" class="form-label">Reason for Leave <span style="color: var(--error);">*</span></label>
+                    <textarea id="reason" name="reason" class="form-textarea" rows="3" placeholder="Please enter a detailed reason..." required></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost" onclick="closeLeaveModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Submit Application</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
 {% endblock %}

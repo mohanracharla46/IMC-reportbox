@@ -592,6 +592,13 @@ def login():
         elif not check_password_hash(user['password'], password):
             flash('Incorrect password. Please try again.', 'error')
         else:
+            # Attendance location check for non-admin users
+            if user['role'] != 'admin':
+                login_loc = (request.form.get('login_location') or request.form.get('location') or '').strip()
+                if not login_loc or login_loc == 'Location Access Denied':
+                    flash('Location permission is required to sign in. Please allow location access in your browser settings and try again.', 'error')
+                    return render_template('login.html')
+
             session['user_id'] = user['id']
             session['user_name'] = user['name']
             session['role'] = user['role']
@@ -602,7 +609,6 @@ def login():
                 try:
                     today_str = date.today().isoformat()
                     now_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    login_loc = request.form.get('login_location') or request.form.get('location') or 'Location Access Denied'
                     conn = get_db_connection()
                     # Check for existing active attendance session today
                     active_att = execute_query(conn,

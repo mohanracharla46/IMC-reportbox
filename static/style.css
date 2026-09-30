@@ -1466,20 +1466,25 @@ body {
 /* ========== Modals ========== */
 .modal {
     display: none;
-    position: fixed;
-    inset: 0;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
     background: rgba(26, 26, 26, 0.4);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    z-index: 1500;
+    z-index: 99999 !important;
     padding: var(--spacing-xl);
-    overflow: hidden;
+    overflow-y: auto;
 }
 
 .modal.active {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
     animation: modalOverlayFadeIn 0.3s ease-out forwards;
 }
 
