@@ -1144,6 +1144,47 @@ def cancel_leave(leave_id):
         
     return redirect(url_for('employee_dashboard'))
 
+@app.route('/admin/holidays/add', methods=['POST'])
+@admin_required
+def add_holiday():
+    """Add a new company holiday"""
+    h_date = request.form.get('date', '').strip()
+    h_name = request.form.get('name', '').strip()
+    
+    if not h_date or not h_name:
+        flash('Please provide both holiday date and title.', 'error')
+        return redirect(url_for('admin_dashboard') + '#holidays')
+        
+    try:
+        conn = get_db_connection()
+        db_url, q = get_db_info()
+        cursor = conn.cursor()
+        cursor.execute(f'INSERT INTO holidays (date, name) VALUES ({q}, {q})', (h_date, h_name))
+        if q == '?':
+            conn.commit()
+        conn.close()
+        flash(f'Holiday "{h_name}" added for {h_date}!', 'success')
+    except Exception as e:
+        flash(f'Error adding holiday (date may already exist): {e}', 'error')
+        
+    return redirect(url_for('admin_dashboard') + '#holidays')
+
+@app.route('/admin/holidays/delete/<int:holiday_id>', methods=['POST'])
+@admin_required
+def delete_holiday(holiday_id):
+    """Delete a company holiday"""
+    try:
+        conn = get_db_connection()
+        execute_query(conn, 'DELETE FROM holidays WHERE id = ?', (holiday_id,))
+        if get_db_info()[1] == '?':
+            conn.commit()
+        conn.close()
+        flash('Holiday removed successfully.', 'success')
+    except Exception as e:
+        flash(f'Error removing holiday: {e}', 'error')
+        
+    return redirect(url_for('admin_dashboard') + '#holidays')
+
 @app.route('/admin/leave/action/<int:leave_id>', methods=['POST'])
 @admin_required
 def admin_leave_action(leave_id):
@@ -1420,46 +1461,6 @@ def admin_dashboard():
         flash(f"Error loading dashboard: {str(e)}", "error")
         return redirect(url_for('index'))
 
-@app.route('/admin/holidays/add', methods=['POST'])
-@admin_required
-def add_holiday():
-    """Add a new company holiday"""
-    h_date = request.form.get('date', '').strip()
-    h_name = request.form.get('name', '').strip()
-    
-    if not h_date or not h_name:
-        flash('Please provide both holiday date and title.', 'error')
-        return redirect(url_for('admin_dashboard') + '#holidays')
-        
-    try:
-        conn = get_db_connection()
-        db_url, q = get_db_info()
-        cursor = conn.cursor()
-        cursor.execute(f'INSERT INTO holidays (date, name) VALUES ({q}, {q})', (h_date, h_name))
-        if q == '?':
-            conn.commit()
-        conn.close()
-        flash(f'Holiday "{h_name}" added for {h_date}!', 'success')
-    except Exception as e:
-        flash(f'Error adding holiday (date may already exist): {e}', 'error')
-        
-    return redirect(url_for('admin_dashboard') + '#holidays')
-
-@app.route('/admin/holidays/delete/<int:holiday_id>', methods=['POST'])
-@admin_required
-def delete_holiday(holiday_id):
-    """Delete a company holiday"""
-    try:
-        conn = get_db_connection()
-        execute_query(conn, 'DELETE FROM holidays WHERE id = ?', (holiday_id,))
-        if get_db_info()[1] == '?':
-            conn.commit()
-        conn.close()
-        flash('Holiday removed successfully.', 'success')
-    except Exception as e:
-        flash(f'Error removing holiday: {e}', 'error')
-        
-    return redirect(url_for('admin_dashboard') + '#holidays')
 
 @app.route('/admin/submit', methods=['POST'])
 @admin_required
