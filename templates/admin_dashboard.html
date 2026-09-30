@@ -152,6 +152,15 @@
             </svg>
             Client Statistics
         </a>
+        <button class="tab-btn" onclick="switchTab('holidays', event)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            Company Holidays
+        </button>
         <a href="{{ url_for('manage_work_types') }}" class="tab-btn" style="text-decoration: none;">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M6 3h12M6 8h12M6 13l8.5 8M6 13h3a5 5 0 0 1 5-5" />
@@ -1017,10 +1026,102 @@
             {% endif %}
         </div>
     </div>
+
+    <!-- Company Holidays Tab -->
+    <div id="holidays-tab" class="tab-content">
+        <div class="card">
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                <div class="header-info">
+                    <h2 class="card-title">Company Holidays List</h2>
+                    <p class="card-subtitle">Manage official company holidays for employee calendar visualization</p>
+                </div>
+                <button type="button" class="btn btn-primary" onclick="showModal('addHolidayModal')">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    Add New Holiday
+                </button>
+            </div>
+
+            {% if holidays %}
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Holiday Name</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for h in holidays %}
+                        <tr>
+                            <td>
+                                <strong style="color: var(--gray-900);">{{ h.date }}</strong>
+                            </td>
+                            <td>
+                                <span style="font-weight: 600; color: var(--gray-800);">{{ h.name }}</span>
+                            </td>
+                            <td>
+                                <span class="badge-approved">🟢 Official Holiday</span>
+                            </td>
+                            <td>
+                                <form method="POST" action="{{ url_for('delete_holiday', holiday_id=h.id) }}" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this holiday?');">
+                                    <button type="submit" class="btn btn-ghost btn-sm" style="color: var(--error); font-weight: 600;">
+                                        Delete
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" />
+                    <line x1="8" y1="2" x2="8" y2="6" />
+                    <line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+                <h3>No holidays configured</h3>
+                <p>Click "Add New Holiday" to add company holidays.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
 </div>
 {% endblock %}
 
 {% block modals %}
+<!-- Add Holiday Modal -->
+<div id="addHolidayModal" class="modal">
+    <div class="modal-content" style="max-width: 450px;">
+        <div class="modal-header">
+            <h3 class="modal-title">Add Company Holiday</h3>
+            <button class="modal-close" onclick="closeModal('addHolidayModal')">&times;</button>
+        </div>
+        <form method="POST" action="{{ url_for('add_holiday') }}">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="holiday_date" class="form-label">Holiday Date <span style="color: var(--error);">*</span></label>
+                    <input type="date" id="holiday_date" name="date" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label for="holiday_name" class="form-label">Holiday Title / Occasion <span style="color: var(--error);">*</span></label>
+                    <input type="text" id="holiday_name" name="name" class="form-input" placeholder="e.g. Diwali, Independence Day" required>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost" onclick="closeModal('addHolidayModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Holiday</button>
+            </div>
+        </form>
+    </div>
+</div>
 <!-- Add Employee Modal -->
 <div id="addEmployeeModal" class="modal">
     <div class="modal-content">

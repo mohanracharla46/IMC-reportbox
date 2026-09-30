@@ -414,6 +414,44 @@ def init_db():
         )
     ''')
     
+    # Create holidays table
+    cursor.execute(f'''
+        CREATE TABLE IF NOT EXISTS holidays (
+            id {id_type},
+            date DATE UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Seed holidays if empty
+    cursor.execute('SELECT COUNT(*) FROM holidays')
+    if cursor.fetchone()[0] == 0:
+        default_holidays = [
+            ('2026-01-01', "New Year's Day"),
+            ('2026-01-14', "Bhogi / Pongal"),
+            ('2026-01-15', "Makar Sankranti"),
+            ('2026-01-26', "Republic Day"),
+            ('2026-03-19', "Ugadi"),
+            ('2026-03-30', "Holi"),
+            ('2026-04-03', "Good Friday"),
+            ('2026-04-14', "Dr. B.R. Ambedkar Jayanti"),
+            ('2026-05-01', "May Day"),
+            ('2026-06-02', "Telangana Formation Day"),
+            ('2026-08-15', "Independence Day"),
+            ('2026-08-26', "Raksha Bandhan"),
+            ('2026-09-04', "Ganesh Chaturthi"),
+            ('2026-10-02', "Gandhi Jayanti"),
+            ('2026-10-20', "Vijayadashami / Dasara"),
+            ('2026-11-08', "Diwali"),
+            ('2026-12-25', "Christmas")
+        ]
+        for h_date, h_name in default_holidays:
+            try:
+                cursor.execute(f'INSERT INTO holidays (date, name) VALUES ({q}, {q})', (h_date, h_name))
+            except Exception:
+                pass
+    
     # Seed clients if empty
     cursor.execute('SELECT COUNT(*) FROM clients')
     if cursor.fetchone()[0] == 0:
@@ -895,6 +933,10 @@ def employee_dashboard():
     # Merge recent attendance history with approved leaves
     recent_attendance = merge_attendance_with_leaves(conn, recent_attendance, user_id=session['user_id'], limit=14)
 
+    # Fetch company holidays
+    holidays_raw = execute_query(conn, 'SELECT id, date, name FROM holidays ORDER BY date ASC').fetchall()
+    holidays_map = {str(h['date'])[:10]: h['name'] for h in holidays_raw}
+
     conn.close()
     
     return render_template(
@@ -906,6 +948,7 @@ def employee_dashboard():
         emp_pagination=emp_pagination,
         raw_streak=raw_streak,
         approved_leave_dates=approved_leave_dates,
+        holidays_map=holidays_map,
         client_distribution=client_distribution,
         all_clients=all_clients,
         today_attendance=today_attendance,
@@ -1341,6 +1384,10 @@ def admin_dashboard():
             
     pending_leaves_count = sum(1 for l in all_leaves if l['status'] == 'Pending')
 
+    # Fetch holidays list for Admin Management
+    holidays_raw = execute_query(conn, 'SELECT * FROM holidays ORDER BY date ASC').fetchall()
+    holidays_list = [dict(row) for row in holidays_raw]
+
     conn.close()
     
     try:
@@ -1365,12 +1412,54 @@ def admin_dashboard():
             leave_type_filter=leave_type_filter,
             employment_type_filter=employment_type_filter,
             all_clients=all_clients,
+            holidays=holidays_list,
             now=datetime.now()
         )
     except Exception as e:
         print(f"Error rendering admin dashboard: {e}")
         flash(f"Error loading dashboard: {str(e)}", "error")
         return redirect(url_for('index'))
+
+@app.route('/admin/holidays/add', methods=['POST'])
+@admin_required
+def add_holiday():
+    """Add a new company holiday"""
+    h_date = request.form.get('date', '').strip()
+    h_name = request.form.get('name', '').strip()
+    
+    if not h_date or not h_name:
+        flash('Please provide both holiday date and title.', 'error')
+        return redirect(url_for('admin_dashboard') + '#holidays')
+        
+    try:
+        conn = get_db_connection()
+        db_url, q = get_db_info()
+        cursor = conn.cursor()
+        cursor.execute(f'INSERT INTO holidays (date, name) VALUES ({q}, {q})', (h_date, h_name))
+        if q == '?':
+            conn.commit()
+        conn.close()
+        flash(f'Holiday "{h_name}" added for {h_date}!', 'success')
+    except Exception as e:
+        flash(f'Error adding holiday (date may already exist): {e}', 'error')
+        
+    return redirect(url_for('admin_dashboard') + '#holidays')
+
+@app.route('/admin/holidays/delete/<int:holiday_id>', methods=['POST'])
+@admin_required
+def delete_holiday(holiday_id):
+    """Delete a company holiday"""
+    try:
+        conn = get_db_connection()
+        execute_query(conn, 'DELETE FROM holidays WHERE id = ?', (holiday_id,))
+        if get_db_info()[1] == '?':
+            conn.commit()
+        conn.close()
+        flash('Holiday removed successfully.', 'success')
+    except Exception as e:
+        flash(f'Error removing holiday: {e}', 'error')
+        
+    return redirect(url_for('admin_dashboard') + '#holidays')
 
 @app.route('/admin/submit', methods=['POST'])
 @admin_required

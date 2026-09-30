@@ -333,6 +333,14 @@
                         box-shadow: 0 3px 6px rgba(239, 68, 68, 0.35);
                     }
 
+                    .calendar-day.holiday-streak {
+                        background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+                        color: #ffffff !important;
+                        font-weight: 700 !important;
+                        box-shadow: 0 4px 10px rgba(16, 185, 129, 0.35) !important;
+                        border-radius: var(--radius-md);
+                    }
+
                     .calendar-day.empty-cell {
                         background: transparent;
                     }
@@ -359,10 +367,14 @@
                     </div>
 
                     <!-- Calendar Legend -->
-                    <div style="display: flex; justify-content: center; gap: 1.25rem; margin-top: 1.2rem; font-size: 0.78rem; color: var(--gray-600);">
+                    <div style="display: flex; justify-content: center; gap: 1rem; margin-top: 1.2rem; font-size: 0.78rem; color: var(--gray-600); flex-wrap: wrap;">
                         <div style="display: flex; align-items: center; gap: 0.4rem;">
                             <span style="width: 10px; height: 10px; border-radius: 50%; background: #01b5b2; display: inline-block;"></span>
                             <span>Work Submitted</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                            <span style="width: 10px; height: 10px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
+                            <span style="font-weight: 600; color: #047857;">Company Holiday</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 0.4rem;">
                             <span style="width: 10px; height: 10px; border-radius: 50%; background: #ef4444; display: inline-block;"></span>
@@ -799,6 +811,9 @@
 <script id="approved-leave-data" type="application/json">
     {{ approved_leave_dates | default([]) | tojson | safe }}
 </script>
+<script id="holidays-data" type="application/json">
+    {{ holidays_map | default({}) | tojson | safe }}
+</script>
 <script id="client-distribution-data" type="application/json">
     {{ client_distribution | default([]) | tojson | safe }}
 </script>
@@ -868,6 +883,17 @@
             console.error('Error parsing approved leave data', e);
         }
 
+        // Parse company holidays map { "YYYY-MM-DD": "Holiday Name" }
+        const holidaysMap = {};
+        try {
+            const hDataEl = document.getElementById('holidays-data');
+            if (hDataEl) {
+                Object.assign(holidaysMap, JSON.parse(hDataEl.textContent));
+            }
+        } catch (e) {
+            console.error('Error parsing holidays data', e);
+        }
+
         const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
         const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -914,7 +940,10 @@
                 dayEl.className = 'calendar-day';
                 dayEl.textContent = day;
 
-                if (approvedLeaveDates.has(dayStr)) {
+                if (holidaysMap[dayStr]) {
+                    dayEl.classList.add('holiday-streak');
+                    dayEl.title = `🎉 Holiday: ${holidaysMap[dayStr]}`;
+                } else if (approvedLeaveDates.has(dayStr)) {
                     dayEl.classList.add('on-leave-streak');
                     dayEl.title = 'On Approved Leave';
                 } else if (activeDates.has(dayStr)) {
