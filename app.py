@@ -609,6 +609,11 @@ def index():
         return redirect(url_for('employee_dashboard'))
     return redirect(url_for('login'))
 
+@app.route('/dashboard')
+def dashboard():
+    """Redirect /dashboard to appropriate dashboard based on role and login status"""
+    return index()
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     """Handle user login"""
