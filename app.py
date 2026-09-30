@@ -1411,7 +1411,7 @@ def admin_dashboard():
             leave_query += ' AND l.end_date <= ?'
             leave_params.append(end_date)
             
-    leave_query += ' ORDER BY CASE WHEN l.status = "Pending" THEN 1 ELSE 2 END, l.created_at DESC'
+    leave_query += " ORDER BY CASE WHEN l.status = 'Pending' THEN 1 ELSE 2 END, l.created_at DESC"
     
     all_leaves_raw = execute_query(conn, leave_query, leave_params).fetchall()
     all_leaves = [dict(row) for row in all_leaves_raw]
