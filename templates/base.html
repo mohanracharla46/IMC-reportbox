@@ -138,8 +138,11 @@
             return `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
         }
 
+        let pendingLogoutUrl = '';
+
         function handleLogoutWithLocation(e, logoutUrl) {
             e.preventDefault();
+            pendingLogoutUrl = logoutUrl;
             
             // Check mandatory report submission requirement for employees
             if (typeof window.submittedToday !== 'undefined' && window.submittedToday === false) {
@@ -160,23 +163,63 @@
 
             // Visual feedback indicator during logout location resolution
             const btn = e.currentTarget;
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '⏳ Fetching Location...';
-            btn.style.pointerEvents = 'none';
+            const originalText = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.innerHTML = '⏳ Fetching Location...';
+                btn.style.pointerEvents = 'none';
+            }
 
             navigator.geolocation.getCurrentPosition(
                 async function(pos) {
                     const lat = pos.coords.latitude;
                     const lng = pos.coords.longitude;
                     const locName = await getReverseGeocodeLogout(lat, lng);
+                    if (typeof closeModal === 'function') closeModal('locationPermissionModal');
                     window.location.href = logoutUrl + '?location=' + encodeURIComponent(locName);
                 },
                 function(err) {
-                    btn.innerHTML = originalText;
-                    btn.style.pointerEvents = 'auto';
-                    alert('Location permission is required to logout and record your shift end.');
+                    if (btn) {
+                        btn.innerHTML = originalText;
+                        btn.style.pointerEvents = 'auto';
+                    }
+                    // Show interactive Location Permission Modal
+                    if (typeof showModal === 'function') {
+                        showModal('locationPermissionModal');
+                    } else {
+                        const m = document.getElementById('locationPermissionModal');
+                        if (m) m.classList.add('active');
+                    }
                 },
-                { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+                { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+            );
+        }
+
+        function retryLogoutLocation() {
+            const retryBtn = document.getElementById('location-modal-retry-btn');
+            if (retryBtn) {
+                retryBtn.innerHTML = '⏳ Requesting Location...';
+                retryBtn.disabled = true;
+            }
+            if (!navigator.geolocation) {
+                alert('Geolocation not supported by this browser.');
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(
+                async function(pos) {
+                    const lat = pos.coords.latitude;
+                    const lng = pos.coords.longitude;
+                    const locName = await getReverseGeocodeLogout(lat, lng);
+                    if (typeof closeModal === 'function') closeModal('locationPermissionModal');
+                    window.location.href = (pendingLogoutUrl || '/logout') + '?location=' + encodeURIComponent(locName);
+                },
+                function(err) {
+                    if (retryBtn) {
+                        retryBtn.innerHTML = '📍 Allow Location & Retry';
+                        retryBtn.disabled = false;
+                    }
+                    alert('Location access is still blocked. Please click the Lock icon 🔒 next to the web address URL in your browser, set Location to "Allow", and try again.');
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
             );
         }
     </script>
@@ -186,6 +229,37 @@
     <main class="main-content fade-in">
         {% block content %}{% endblock %}
     </main>
+
+    <!-- Location Permission Required Modal -->
+    <div id="locationPermissionModal" class="modal">
+        <div class="modal-content" style="max-width: 450px; text-align: center; padding: 2rem 1.5rem;">
+            <div style="width: 60px; height: 60px; background: rgba(1, 181, 178, 0.12); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.25rem auto; color: var(--primary-600); font-size: 1.75rem;">
+                📍
+            </div>
+            <h3 style="margin-bottom: 0.5rem; font-size: 1.25rem; font-weight: 700; color: var(--gray-900);">Location Access Required</h3>
+            <p style="font-size: 0.9rem; color: var(--gray-600); margin-bottom: 1.25rem; line-height: 1.5;">
+                Location permission is required to record your shift end and log out. Please allow location access to proceed.
+            </p>
+            
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 0.85rem 1rem; text-align: left; margin-bottom: 1.5rem; font-size: 0.825rem; color: #475569;">
+                <strong style="color: #1e293b; display: block; margin-bottom: 6px;">🔒 How to enable location if blocked:</strong>
+                <ol style="margin: 0; padding-left: 1.2rem; line-height: 1.6;">
+                    <li>Click the <strong>Lock / Tune icon 🔒</strong> next to the URL in your browser address bar.</li>
+                    <li>Change <strong>Location</strong> setting from Blocked to <strong>Allow</strong>.</li>
+                    <li>Click the <strong>Allow Location & Retry</strong> button below.</li>
+                </ol>
+            </div>
+
+            <div style="display: flex; gap: 10px; flex-direction: column;">
+                <button type="button" id="location-modal-retry-btn" class="btn btn-primary btn-full" style="padding: 10px 0; font-weight: 600;" onclick="retryLogoutLocation()">
+                    📍 Allow Location & Retry
+                </button>
+                <button type="button" class="btn btn-ghost btn-full" style="padding: 8px 0; font-weight: 500;" onclick="closeModal('locationPermissionModal')">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- Upload Today Tasks Requirement Modal Popup -->
     <div id="uploadTaskModal" class="modal">

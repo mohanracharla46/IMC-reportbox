@@ -119,10 +119,10 @@
                             statusBox.style.borderColor = 'rgba(239, 68, 68, 0.3)';
                             statusBox.style.color = '#dc2626';
                             icon.textContent = '⚠️';
-                            statusText.textContent = 'Location Access Denied! Location permission is required to sign in.';
+                            statusText.textContent = 'Location Access Denied! Click "Sign In" or allow location to retry.';
                             if (onError) onError(err);
                         },
-                        { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+                        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
                     );
                 }
 
@@ -134,9 +134,14 @@
                     if (!isLocationReady || isLocationDenied || !locInput.value) {
                         e.preventDefault();
                         if (isLocationDenied) {
-                            alert('Location permission is required to sign in. Please enable location access in your browser settings and try again.');
+                            if (typeof showModal === 'function') {
+                                showModal('locationPermissionModal');
+                            } else {
+                                const m = document.getElementById('locationPermissionModal');
+                                if (m) m.classList.add('active');
+                            }
                         } else {
-                            alert('Waiting for live location... Please allow location access when prompted by your browser.');
+                            statusText.textContent = 'Requesting location... Please allow location access when prompted.';
                             fetchLocation();
                         }
                     }
