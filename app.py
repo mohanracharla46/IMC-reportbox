@@ -19,6 +19,8 @@ import re
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import threading
+
 # Automatically load environment variables from .env file if present
 def load_env_file():
     env_path = os.path.join(os.path.dirname(__file__), '.env')
@@ -1214,15 +1216,18 @@ def apply_leave():
         if get_db_info()[1] == '?':
             conn.commit()
 
-        # Send email notification to admin webmail
-        emp_name = session.get('user_name', 'Employee')
-        emp_email = session.get('user_email', '')
-        if not emp_email:
-            user_info = execute_query(conn, 'SELECT email FROM users WHERE id = ?', (session['user_id'],)).fetchone()
-            if user_info and user_info['email']:
-                emp_email = user_info['email']
-        
-        send_leave_notification_email(emp_name, emp_email, leave_type, start_date, end_date, reason)
+        # Send email notification to admin webmail (isolated try-except so email errors never block leave creation)
+        try:
+            emp_name = session.get('user_name', 'Employee')
+            emp_email = session.get('user_email', '')
+            if not emp_email:
+                user_info = execute_query(conn, 'SELECT email FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+                if user_info and user_info['email']:
+                    emp_email = user_info['email']
+            
+            send_leave_notification_email(emp_name, emp_email, leave_type, start_date, end_date, reason)
+        except Exception as mail_err:
+            print(f"Failed to trigger leave notification email: {mail_err}")
 
         flash('Leave application submitted successfully! Pending admin approval.', 'success')
     except Exception as e:
