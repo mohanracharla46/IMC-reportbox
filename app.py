@@ -16,6 +16,24 @@ import pandas as pd
 from io import BytesIO
 import urllib.parse as urlparse
 import re
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+# Automatically load environment variables from .env file if present
+def load_env_file():
+    env_path = os.path.join(os.path.dirname(__file__), '.env')
+    if os.path.exists(env_path):
+        try:
+            with open(env_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#') and '=' in line:
+                        key, val = line.split('=', 1)
+                        os.environ[key.strip()] = val.strip().strip("'\"")
+        except Exception as e:
+            print(f"Error loading .env file: {e}")
+
+load_env_file()
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-in-production'  # Change this in production!
@@ -650,6 +668,7 @@ def login():
 
             session['user_id'] = user['id']
             session['user_name'] = user['name']
+            session['user_email'] = user['email']
             session['role'] = user['role']
             session['employment_type'] = dict(user).get('employment_type', 'inhouse')
             
@@ -1075,6 +1094,82 @@ def submit_report():
     
     return redirect(url_for('employee_dashboard'))
 
+def send_leave_notification_email(employee_name, employee_email, leave_type, start_date, end_date, reason):
+    """
+    Asynchronously send an email notification to admin webmail when an employee applies for leave.
+    Runs in a background thread so UI response remains instant.
+    """
+    def _send():
+        try:
+            smtp_server = os.environ.get('MAIL_SERVER', '').strip()
+            smtp_port = int(os.environ.get('MAIL_PORT', 587))
+            sender_email = os.environ.get('MAIL_USERNAME', '').strip()
+            sender_password = os.environ.get('MAIL_PASSWORD', '').strip()
+            use_tls = os.environ.get('MAIL_USE_TLS', 'true').lower() == 'true'
+            use_ssl = os.environ.get('MAIL_USE_SSL', 'false').lower() == 'true'
+            
+            # Fetch target admin email from DB or env
+            admin_email = os.environ.get('ADMIN_EMAIL', '').strip()
+            if not admin_email:
+                try:
+                    conn = get_db_connection()
+                    admin_user = execute_query(conn, "SELECT email FROM users WHERE role = 'admin' LIMIT 1").fetchone()
+                    conn.close()
+                    if admin_user and admin_user['email']:
+                        admin_email = admin_user['email']
+                except Exception as e:
+                    print(f"Error fetching admin email for notification: {e}")
+            
+            if not admin_email:
+                admin_email = 'prashanth@iramediaconcepts.com'
+                
+            if not smtp_server or not sender_email or not sender_password:
+                print(f"[Leave Email] Skipping email: MAIL_SERVER, MAIL_USERNAME, or MAIL_PASSWORD not configured.")
+                return
+
+            subject = f"New Leave Application: {employee_name} ({leave_type})"
+            
+            body = f"""Hello Admin,
+
+A new leave application has been submitted on the Work Report Management System:
+
+• Employee Name : {employee_name}
+• Employee Email: {employee_email}
+• Leave Type    : {leave_type}
+• Start Date    : {start_date}
+• End Date      : {end_date}
+• Reason        : {reason}
+
+Please log in to the Admin Dashboard to review and process this leave request.
+
+Regards,
+Work Report System
+"""
+
+            msg = MIMEMultipart()
+            msg['From'] = sender_email
+            msg['To'] = admin_email
+            msg['Subject'] = subject
+            msg.attach(MIMEText(body, 'plain'))
+
+            if use_ssl:
+                with smtplib.SMTP_SSL(smtp_server, smtp_port) as server:
+                    server.login(sender_email, sender_password)
+                    server.send_message(msg)
+            else:
+                with smtplib.SMTP(smtp_server, smtp_port) as server:
+                    if use_tls:
+                        server.starttls()
+                    server.login(sender_email, sender_password)
+                    server.send_message(msg)
+
+            print(f"[Leave Email] Successfully sent notification to {admin_email} for {employee_name}.")
+
+        except Exception as e:
+            print(f"[Leave Email] Exception while sending email: {e}")
+
+    threading.Thread(target=_send, daemon=True).start()
+
 @app.route('/employee/apply-leave', methods=['POST'])
 @login_required
 def apply_leave():
@@ -1118,6 +1213,17 @@ def apply_leave():
         )
         if get_db_info()[1] == '?':
             conn.commit()
+
+        # Send email notification to admin webmail
+        emp_name = session.get('user_name', 'Employee')
+        emp_email = session.get('user_email', '')
+        if not emp_email:
+            user_info = execute_query(conn, 'SELECT email FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+            if user_info and user_info['email']:
+                emp_email = user_info['email']
+        
+        send_leave_notification_email(emp_name, emp_email, leave_type, start_date, end_date, reason)
+
         flash('Leave application submitted successfully! Pending admin approval.', 'success')
     except Exception as e:
         flash(f'Error submitting leave application: {str(e)}', 'error')
