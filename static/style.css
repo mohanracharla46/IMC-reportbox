@@ -2507,4 +2507,59 @@ body {
     border-radius: 9999px;
     font-size: 0.78rem;
     font-weight: 700;
-}
+}
+
+/* ========== Employee Development Mode Scrolling Announcement Banner ========== */
+.scrolling-ticker-banner {
+    background: linear-gradient(90deg, #fef3c7 0%, #fde68a 50%, #fef3c7 100%);
+    border-bottom: 1px solid rgba(245, 158, 11, 0.4);
+    color: #92400e;
+    overflow: hidden;
+    white-space: nowrap;
+    position: relative;
+    padding: 9px 0;
+    font-size: 0.885rem;
+    font-weight: 500;
+    box-shadow: inset 0 -2px 4px rgba(0, 0, 0, 0.04);
+    z-index: 999;
+}
+
+.scrolling-ticker-track {
+    display: flex;
+    width: max-content;
+    animation: marqueeTicker 30s linear infinite;
+}
+
+.scrolling-ticker-track:hover {
+    animation-play-state: paused;
+}
+
+.scrolling-ticker-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 50px;
+}
+
+.ticker-badge {
+    background: #d97706;
+    color: #ffffff;
+    font-size: 0.725rem;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 4px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    box-shadow: 0 1px 3px rgba(217, 119, 6, 0.3);
+    flex-shrink: 0;
+}
+
+@keyframes marqueeTicker {
+    0% {
+        transform: translateX(0%);
+    }
+    100% {
+        transform: translateX(-50%);
+    }
+}
+

@@ -1096,42 +1096,80 @@ def submit_report():
     
     return redirect(url_for('employee_dashboard'))
 
-def send_leave_notification_email(employee_name, employee_email, leave_type, start_date, end_date, reason):
+def _send_smtp_email(to_email, subject, body, reply_to=None):
     """
-    Asynchronously send an email notification to admin webmail when an employee applies for leave.
-    Runs in a background thread so UI response remains instant.
+    Core helper to send an email via SMTP in a background thread.
+    Reads server configuration safely from environment variables.
     """
     def _send():
         try:
             smtp_server = os.environ.get('MAIL_SERVER', '').strip()
-            smtp_port = int(os.environ.get('MAIL_PORT', 587))
+            raw_port = os.environ.get('MAIL_PORT', '').strip()
             sender_email = os.environ.get('MAIL_USERNAME', '').strip()
             sender_password = os.environ.get('MAIL_PASSWORD', '').strip()
             use_tls = os.environ.get('MAIL_USE_TLS', 'true').lower() == 'true'
             use_ssl = os.environ.get('MAIL_USE_SSL', 'false').lower() == 'true'
             
-            # Fetch target admin email from DB or env
-            admin_email = os.environ.get('ADMIN_EMAIL', '').strip()
-            if not admin_email:
-                try:
-                    conn = get_db_connection()
-                    admin_user = execute_query(conn, "SELECT email FROM users WHERE role = 'admin' LIMIT 1").fetchone()
-                    conn.close()
-                    if admin_user and admin_user['email']:
-                        admin_email = admin_user['email']
-                except Exception as e:
-                    print(f"Error fetching admin email for notification: {e}")
-            
-            if not admin_email:
-                admin_email = 'prashanth@iramediaconcepts.com'
-                
+            try:
+                smtp_port = int(raw_port) if raw_port else (465 if use_ssl else 587)
+            except ValueError:
+                smtp_port = 465 if use_ssl else 587
+
             if not smtp_server or not sender_email or not sender_password:
                 print(f"[Leave Email] Skipping email: MAIL_SERVER, MAIL_USERNAME, or MAIL_PASSWORD not configured.")
                 return
 
-            subject = f"New Leave Application: {employee_name} ({leave_type})"
-            
-            body = f"""Hello Admin,
+            if not to_email or '@' not in to_email:
+                print(f"[Leave Email] Skipping email: Invalid recipient email address '{to_email}'")
+                return
+
+            msg = MIMEMultipart()
+            msg['From'] = sender_email
+            msg['To'] = to_email
+            msg['Subject'] = subject
+            if reply_to:
+                msg['Reply-To'] = reply_to
+            msg.attach(MIMEText(body, 'plain', 'utf-8'))
+
+            if use_ssl:
+                with smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=15) as server:
+                    server.login(sender_email, sender_password)
+                    server.send_message(msg)
+            else:
+                with smtplib.SMTP(smtp_server, smtp_port, timeout=15) as server:
+                    if use_tls:
+                        server.starttls()
+                    server.login(sender_email, sender_password)
+                    server.send_message(msg)
+
+            print(f"[Leave Email] Successfully sent notification to {to_email} ('{subject}').")
+
+        except Exception as e:
+            print(f"[Leave Email] Exception while sending email to {to_email}: {e}")
+
+    threading.Thread(target=_send, daemon=True).start()
+
+def send_leave_notification_email(employee_name, employee_email, leave_type, start_date, end_date, reason):
+    """
+    Asynchronously send an email notification to admin webmail when an employee applies for leave.
+    """
+    admin_email = os.environ.get('ADMIN_EMAIL', '').strip()
+    if not admin_email:
+        try:
+            conn = get_db_connection()
+            admin_user = execute_query(conn, "SELECT email FROM users WHERE role = 'admin' LIMIT 1").fetchone()
+            conn.close()
+            if admin_user and admin_user['email']:
+                admin_email = admin_user['email']
+        except Exception as e:
+            print(f"Error fetching admin email for notification: {e}")
+    
+    if not admin_email:
+        admin_email = 'prashanth@iramediaconcepts.com'
+
+    subject = f"New Leave Application: {employee_name} ({leave_type})"
+    
+    body = f"""Hello Admin,
 
 A new leave application has been submitted on the Work Report Management System:
 
@@ -1147,30 +1185,35 @@ Please log in to the Admin Dashboard to review and process this leave request.
 Regards,
 Work Report System
 """
+    _send_smtp_email(to_email=admin_email, subject=subject, body=body, reply_to=employee_email)
 
-            msg = MIMEMultipart()
-            msg['From'] = sender_email
-            msg['To'] = admin_email
-            msg['Subject'] = subject
-            msg.attach(MIMEText(body, 'plain'))
+def send_leave_status_update_email(employee_name, employee_email, leave_type, start_date, end_date, status, admin_remarks=None):
+    """
+    Asynchronously send an email notification to employee when an admin approves or rejects their leave application.
+    """
+    if not employee_email:
+        print(f"[Leave Email] Skipping employee email: No recipient email address found for {employee_name}.")
+        return
 
-            if use_ssl:
-                with smtplib.SMTP_SSL(smtp_server, smtp_port) as server:
-                    server.login(sender_email, sender_password)
-                    server.send_message(msg)
-            else:
-                with smtplib.SMTP(smtp_server, smtp_port) as server:
-                    if use_tls:
-                        server.starttls()
-                    server.login(sender_email, sender_password)
-                    server.send_message(msg)
+    status_str = status.upper()
+    subject = f"Leave Application {status}: {leave_type} ({start_date} to {end_date})"
+    
+    remarks_text = f"\n• Admin Remarks: {admin_remarks}" if admin_remarks else ""
+    
+    body = f"""Hello {employee_name},
 
-            print(f"[Leave Email] Successfully sent notification to {admin_email} for {employee_name}.")
+Your leave application has been reviewed by the Admin:
 
-        except Exception as e:
-            print(f"[Leave Email] Exception while sending email: {e}")
+• Leave Type    : {leave_type}
+• Period        : {start_date} to {end_date}
+• Status        : {status_str}{remarks_text}
 
-    threading.Thread(target=_send, daemon=True).start()
+Please log in to your dashboard for details.
+
+Regards,
+Work Report Management System
+"""
+    _send_smtp_email(to_email=employee_email, subject=subject, body=body)
 
 @app.route('/employee/apply-leave', methods=['POST'])
 @login_required
@@ -1332,6 +1375,24 @@ def admin_leave_action(leave_id):
         )
         if get_db_info()[1] == '?':
             conn.commit()
+
+        # Send status update email notification to employee
+        try:
+            leave_dict = dict(leave)
+            user_info = execute_query(conn, 'SELECT name, email FROM users WHERE id = ?', (leave_dict['user_id'],)).fetchone()
+            if user_info and user_info['email']:
+                send_leave_status_update_email(
+                    employee_name=user_info['name'],
+                    employee_email=user_info['email'],
+                    leave_type=leave_dict['leave_type'],
+                    start_date=leave_dict['start_date'],
+                    end_date=leave_dict['end_date'],
+                    status=action,
+                    admin_remarks=admin_remarks
+                )
+        except Exception as mail_err:
+            print(f"[Leave Email] Failed to trigger status email to employee: {mail_err}")
+
         flash(f'Leave application successfully {action.lower()}.', 'success')
     except Exception as e:
         flash(f'Error updating leave application: {str(e)}', 'error')

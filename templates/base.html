@@ -225,6 +225,30 @@
     </script>
     {% endif %}
 
+    <!-- Employee Announcement Ticker Banner -->
+    {% if session.role == 'employee' %}
+    <div class="scrolling-ticker-banner" title="Development Mode Announcement">
+        <div class="scrolling-ticker-track">
+            <div class="scrolling-ticker-item">
+                <span class="ticker-badge">⚠️ Development Mode</span>
+                <span>Portal is in <strong>Development mode</strong> — <strong>Only upload works</strong>. Do not apply for leaves until it goes to <strong>production mode</strong>.</span>
+            </div>
+            <div class="scrolling-ticker-item">
+                <span class="ticker-badge">⚠️ Development Mode</span>
+                <span>Portal is in <strong>Development mode</strong> — <strong>Only upload works</strong>. Do not apply for leaves until it goes to <strong>production mode</strong>.</span>
+            </div>
+            <div class="scrolling-ticker-item">
+                <span class="ticker-badge">⚠️ Development Mode</span>
+                <span>Portal is in <strong>Development mode</strong> — <strong>Only upload works</strong>. Do not apply for leaves until it goes to <strong>production mode</strong>.</span>
+            </div>
+            <div class="scrolling-ticker-item">
+                <span class="ticker-badge">⚠️ Development Mode</span>
+                <span>Portal is in <strong>Development mode</strong> — <strong>Only upload works</strong>. Do not apply for leaves until it goes to <strong>production mode</strong>.</span>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Main Content -->
     <main class="main-content fade-in">
         {% block content %}{% endblock %}
