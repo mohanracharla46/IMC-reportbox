@@ -2528,16 +2528,28 @@ def work_analysis():
         if key not in person_client_meta:
             person_client_meta[key] = {'person_name': sub['empname'], 'employment_type': sub['employment_type'], 'client_name': sub['client']}
     all_work_types = sorted(list(work_types_set)); chart_rows = []
-    for key in sorted(pivot.keys(), key=lambda k: (k[0].lower(), k[1].lower() if k[1] else '')):
+    for key in sorted(pivot.keys(), key=lambda k: ((k[0] or '').lower(), (k[1] or '').lower())):
         meta = person_client_meta[key]; work_counts = pivot[key]; total = sum(work_counts.values())
         chart_rows.append({'person_name': meta['person_name'], 'employment_type': meta['employment_type'], 'client_name': meta['client_name'], 'work_counts': work_counts, 'total': total})
-    streak_query = 'SELECT COALESCE(s.employee_name, u.name) as person_name, s.date as work_date, SUM(CAST(s.quantity AS INTEGER)) as daily_qty FROM submissions s JOIN users u ON s.user_id = u.id WHERE 1=1'
-    if filter_client: streak_query += ' AND LOWER(s.client_name) = LOWER(?)'
-    if filter_person: streak_query += ' AND (LOWER(u.name) = LOWER(?) OR LOWER(s.employee_name) = LOWER(?))'
-    if filter_start: streak_query += ' AND s.date >= ?'
-    if filter_end: streak_query += ' AND s.date <= ?'
+    streak_query = 'SELECT COALESCE(s.employee_name, u.name) as person_name, s.date as work_date, SUM(CAST(s.quantity AS INTEGER)) as daily_qty FROM submissions s LEFT JOIN users u ON s.user_id = u.id WHERE 1=1'
+    streak_params = []
+    if filter_client:
+        streak_query += ' AND LOWER(s.client_name) = LOWER(?)'
+        streak_params.append(filter_client)
+    if filter_person:
+        streak_query += ' AND (LOWER(u.name) = LOWER(?) OR LOWER(s.employee_name) = LOWER(?))'
+        streak_params.append(filter_person); streak_params.append(filter_person)
+    if filter_start:
+        streak_query += ' AND s.date >= ?'
+        streak_params.append(filter_start)
+    if filter_end:
+        streak_query += ' AND s.date <= ?'
+        streak_params.append(filter_end)
+    if filter_type != 'Both':
+        streak_query += ' AND u.employment_type = ?'
+        streak_params.append(filter_type)
     streak_query += ' GROUP BY COALESCE(s.employee_name, u.name), s.date ORDER BY s.date ASC'
-    raw_streak_results = execute_query(conn, streak_query, params).fetchall()
+    raw_streak_results = execute_query(conn, streak_query, streak_params).fetchall()
     raw_streak = format_streak_dates(raw_streak_results); conn.close()
     return render_template('work_analysis.html', all_clients=all_clients, all_persons=all_persons, filter_client=filter_client, filter_person=filter_person, filter_type=filter_type, filter_start=filter_start, filter_end=filter_end, all_work_types=all_work_types, table_rows=chart_rows, detailed_submissions=detailed_submissions, raw_streak=raw_streak)
 
