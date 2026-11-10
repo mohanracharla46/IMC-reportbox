@@ -17,19 +17,13 @@
                 <line x1="8" y1="2" x2="8" y2="6" />
                 <line x1="3" y1="10" x2="21" y2="10" />
             </svg>
-            {% if session.get('employment_type') == 'freelancer' %}
             <input type="date" name="submission_date" id="submission-date" form="report-form"
                 value="{{ now.strftime('%Y-%m-%d') }}" max="{{ now.strftime('%Y-%m-%d') }}" required
                 style="background: transparent; border: 1px solid var(--gray-300); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 0.9rem; color: var(--text-primary);"
-                title="Select date for work report (Freelancers can submit for past dates)">
-            {% else %}
-            <input type="date" id="submission-date-disabled"
-                value="{{ now.strftime('%Y-%m-%d') }}" disabled
-                style="background: rgba(0, 0, 0, 0.05); border: 1px solid var(--gray-300); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 0.9rem; color: var(--text-muted); cursor: not-allowed;"
-                title="In-house employees cannot edit submission date">
-            <input type="hidden" name="submission_date" id="submission-date" form="report-form" value="{{ now.strftime('%Y-%m-%d') }}">
-            <span style="font-size: 0.75rem; color: var(--gray-500); font-weight: 500; display: inline-flex; align-items: center; gap: 2px;" title="Date editing restricted to freelancers">
-                🔒 Today
+                title="{% if session.get('employment_type') == 'freelancer' %}Select date for work report (Freelancers can submit for past dates){% else %}Select date for work report (Past dates require a valid reason){% endif %}">
+            {% if session.get('employment_type') != 'freelancer' %}
+            <span id="past-date-badge" style="font-size: 0.75rem; color: var(--gray-600); font-weight: 600; display: inline-flex; align-items: center; gap: 4px;" title="Select a past date to upload missed work with a valid reason">
+                Today
             </span>
             {% endif %}
         </div>
@@ -137,12 +131,37 @@
     <div class="dashboard-grid" style="grid-template-columns: 1fr;">
         <!-- Submission Form -->
         <div class="card">
-            <div class="card-header">
-                <h2 class="card-title">Submit Work Report</h2>
-                <p class="card-subtitle">You can submit multiple reports per day</p>
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+                <div>
+                    <h2 class="card-title">Submit Work Report</h2>
+                    <p class="card-subtitle">
+                        You can submit multiple reports per day{% if session.get('employment_type') != 'freelancer' %} &middot; Past dates require a valid reason{% endif %}
+                    </p>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                    <span id="form-work-date-pill" style="font-size: 0.82rem; font-weight: 600; color: var(--gray-700); background: var(--gray-100); padding: 4px 10px; border-radius: 9999px; border: 1px solid var(--gray-200);">
+                        📅 Work Date: {{ now.strftime('%Y-%m-%d') }} (Today)
+                    </span>
+                    <button type="button" id="focus-date-picker-btn" class="btn btn-sm btn-ghost" style="font-size: 0.8rem; padding: 4px 10px; border: 1px solid var(--gray-300);">
+                        Change Date
+                    </button>
+                </div>
             </div>
             <form id="report-form" method="POST" action="{{ url_for('submit_report') }}" enctype="multipart/form-data"
                 class="report-form" style="padding: var(--spacing-xl);">
+
+                {% if session.get('employment_type') != 'freelancer' %}
+                <div id="past_reason_group" class="form-group" style="display: none; margin-bottom: 1.5rem; padding: 1rem 1.25rem; background: #fffbeb; border: 1px solid #fcd34d; border-radius: var(--radius-md);">
+                    <label for="past_submission_reason" class="form-label" style="color: #92400e; display: flex; align-items: center; gap: 6px;">
+                        <span>⚠️ Reason for Past Date Submission</span>
+                        <span style="color: var(--error);">*</span>
+                    </label>
+                    <textarea id="past_submission_reason" name="past_submission_reason" class="form-textarea" rows="2"
+                        placeholder="Please provide a valid reason for not submitting on that day..."
+                        style="background: #ffffff; border-color: #f59e0b;"></textarea>
+                    <div class="form-help" style="color: #b45309;">Mandatory when submitting work for a past date (<span id="selected_past_date_text"></span>)</div>
+                </div>
+                {% endif %}
 
                 <!-- 1. Client Category -->
                 <!-- 2. Client Name -->
@@ -476,6 +495,11 @@
                     <td>
                         <div class="work-text">{{ submission['work_text'][:60] }}{% if
                             submission['work_text']|length > 60 %}...{% endif %}</div>
+                        {% if submission['past_submission_reason'] %}
+                        <div style="margin-top: 4px; font-size: 0.78rem; color: #b45309; background: #fef3c7; border: 1px solid #fde68a; padding: 2px 7px; border-radius: 4px; display: inline-block;" title="{{ submission['past_submission_reason'] }}">
+                            <strong>Past Reason:</strong> {{ submission['past_submission_reason'][:50] }}{% if submission['past_submission_reason']|length > 50 %}...{% endif %}
+                        </div>
+                        {% endif %}
                     </td>
                     <td>
                         {% if submission['file_path'] %}
@@ -803,6 +827,127 @@
         }
     }
     window.submittedToday = {{ 'true' if (submitted_today or today_approved_leave) else 'false' }};
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const serverToday = "{{ now.strftime('%Y-%m-%d') }}";
+        const isFreelancer = {{ 'true' if session.get('employment_type') == 'freelancer' else 'false' }};
+        const dateInput = document.getElementById('submission-date');
+        const pastBadge = document.getElementById('past-date-badge');
+        const pastReasonGroup = document.getElementById('past_reason_group');
+        const pastReasonInput = document.getElementById('past_submission_reason');
+        const selectedPastDateText = document.getElementById('selected_past_date_text');
+        const formWorkDatePill = document.getElementById('form-work-date-pill');
+        const focusDateBtn = document.getElementById('focus-date-picker-btn');
+        const reportForm = document.getElementById('report-form');
+
+        function updatePastDateState() {
+            if (!dateInput) return;
+            const selectedDate = dateInput.value || serverToday;
+            const isPastDate = selectedDate < serverToday;
+
+            if (formWorkDatePill) {
+                if (isPastDate) {
+                    formWorkDatePill.textContent = `⚠️ Past Date: ${selectedDate}`;
+                    formWorkDatePill.style.background = '#fef3c7';
+                    formWorkDatePill.style.color = '#92400e';
+                    formWorkDatePill.style.borderColor = '#fde68a';
+                } else {
+                    formWorkDatePill.textContent = `📅 Work Date: ${selectedDate} (Today)`;
+                    formWorkDatePill.style.background = 'var(--gray-100)';
+                    formWorkDatePill.style.color = 'var(--gray-700)';
+                    formWorkDatePill.style.borderColor = 'var(--gray-200)';
+                }
+            }
+
+            if (!isFreelancer) {
+                if (pastBadge) {
+                    if (isPastDate) {
+                        pastBadge.textContent = '⚠️ Past Date (Reason Required)';
+                        pastBadge.style.color = '#b45309';
+                        pastBadge.style.background = '#fef3c7';
+                        pastBadge.style.padding = '2px 8px';
+                        pastBadge.style.borderRadius = '9999px';
+                        pastBadge.style.border = '1px solid #fde68a';
+                    } else {
+                        pastBadge.textContent = 'Today';
+                        pastBadge.style.color = 'var(--gray-600)';
+                        pastBadge.style.background = 'transparent';
+                        pastBadge.style.padding = '0';
+                        pastBadge.style.border = 'none';
+                    }
+                }
+
+                if (pastReasonGroup && pastReasonInput) {
+                    if (isPastDate) {
+                        pastReasonGroup.style.display = 'block';
+                        pastReasonInput.required = true;
+                        if (selectedPastDateText) selectedPastDateText.textContent = selectedDate;
+                    } else {
+                        pastReasonGroup.style.display = 'none';
+                        pastReasonInput.required = false;
+                        pastReasonInput.setCustomValidity('');
+                        pastReasonInput.classList.remove('invalid');
+                        pastReasonInput.style.borderColor = '#f59e0b';
+                    }
+                }
+            }
+        }
+
+        if (dateInput) {
+            dateInput.addEventListener('change', updatePastDateState);
+            dateInput.addEventListener('input', updatePastDateState);
+            updatePastDateState();
+        }
+
+        if (pastReasonInput) {
+            pastReasonInput.addEventListener('input', function () {
+                if (this.required && this.value.length > 0 && !this.value.trim()) {
+                    this.setCustomValidity('Please provide a valid reason (cannot be blank spaces).');
+                } else {
+                    this.setCustomValidity('');
+                }
+                if (this.classList.contains('invalid') && typeof validateInput === 'function') {
+                    validateInput(this);
+                }
+            });
+
+            pastReasonInput.addEventListener('blur', function () {
+                if (this.required && typeof validateInput === 'function') {
+                    validateInput(this);
+                }
+            });
+        }
+
+        if (reportForm && pastReasonInput) {
+            reportForm.addEventListener('submit', function (e) {
+                if (pastReasonInput.required && !pastReasonInput.value.trim()) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    pastReasonInput.setCustomValidity('Please provide a valid reason for not submitting on that day.');
+                    pastReasonInput.reportValidity();
+                } else {
+                    pastReasonInput.setCustomValidity('');
+                }
+            });
+        }
+
+        if (focusDateBtn && dateInput) {
+            focusDateBtn.addEventListener('click', function () {
+                dateInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                setTimeout(() => {
+                    try {
+                        if (typeof dateInput.showPicker === 'function') {
+                            dateInput.showPicker();
+                        } else {
+                            dateInput.focus();
+                        }
+                    } catch (err) {
+                        dateInput.focus();
+                    }
+                }, 150);
+            });
+        }
+    });
 </script>
 
 <script id="my-streak-data" type="application/json">
@@ -1079,10 +1224,6 @@
         </div>
         <form method="POST" action="{{ url_for('apply_leave') }}">
             <div class="modal-body" style="display: flex; flex-direction: column; gap: 1.25rem;">
-                <div style="background: #fef3c7; border: 1px solid #fde68a; border-radius: 8px; padding: 0.75rem 1rem; color: #92400e; font-size: 0.85rem; font-weight: 500; display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 1.1rem;">⚠️</span>
-                    <span><strong>Notice:</strong> Portal is in Development mode. Only report upload works — please do not apply for leaves until it goes to production mode.</span>
-                </div>
                 <div class="form-group">
                     <label for="leave_type" class="form-label">Leave Type <span style="color: var(--error);">*</span></label>
                     <select id="leave_type" name="leave_type" class="form-input" required>

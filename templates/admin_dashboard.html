@@ -6,7 +6,7 @@
 <div class="dashboard-container">
     <div class="dashboard-header">
         <div class="header-content">
-            <h1 class="page-title">Admin Dashboard</h1>
+            <h1 class="page-title">Dashboard Overview</h1>
             <p class="page-subtitle">Manage employees and view all work reports</p>
         </div>
     </div>
@@ -17,8 +17,8 @@
     </script>
 
     <!-- Statistics Cards -->
-    <div class="stats-grid">
-        <div class="stat-card">
+    <div class="stats-grid crm-stats-grid">
+        <div class="stat-card crm-stat-card">
             <div class="stat-icon stat-icon-blue">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -41,7 +41,7 @@
             </div>
         </div>
 
-        <div class="stat-card">
+        <div class="stat-card crm-stat-card">
             <div class="stat-icon stat-icon-green">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
@@ -53,7 +53,7 @@
             </div>
         </div>
 
-        <div class="stat-card">
+        <div class="stat-card crm-stat-card">
             <div class="stat-icon stat-icon-purple">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -68,7 +68,7 @@
             </div>
         </div>
 
-        <div class="stat-card" style="cursor: pointer;" onclick="switchTab('leaves', event)">
+        <div class="stat-card crm-stat-card" style="cursor: pointer;" onclick="switchTab('leaves', event)">
             <div class="stat-icon" style="background: rgba(245, 158, 11, 0.15); color: #d97706;">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
@@ -82,91 +82,6 @@
                 <div class="stat-value" style="color: #d97706;">{{ pending_leaves_count }}</div>
             </div>
         </div>
-    </div>
-
-    <!-- Tabs -->
-    <div class="tabs">
-        <button class="tab-btn active" onclick="switchTab('submissions', event)">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-            </svg>
-            Work Submissions
-        </button>
-        <button class="tab-btn" onclick="switchTab('employees', event)">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-            </svg>
-            Manage Employees
-        </button>
-        <button class="tab-btn" onclick="switchTab('freelancers', event)">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                <path d="M15 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-            Manage Freelancers
-        </button>
-        <button class="tab-btn" onclick="switchTab('direct-submission', event)">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-7" />
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-            </svg>
-            Submit Work
-        </button>
-        <button class="tab-btn" onclick="switchTab('attendance', event)">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
-            </svg>
-            Attendance & Hours
-        </button>
-        <button class="tab-btn" onclick="switchTab('leaves', event)">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                <line x1="16" y1="2" x2="16" y2="6" />
-                <line x1="8" y1="2" x2="8" y2="6" />
-                <line x1="3" y1="10" x2="21" y2="10" />
-            </svg>
-            Leave Applications
-            {% if pending_leaves_count > 0 %}
-            <span class="nav-badge-count">{{ pending_leaves_count }}</span>
-            {% endif %}
-        </button>
-        <a href="{{ url_for('work_analysis') }}" class="tab-btn" style="text-decoration: none;">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="3" width="7" height="7" rx="1" />
-                <rect x="14" y="3" width="7" height="7" rx="1" />
-                <rect x="3" y="14" width="7" height="7" rx="1" />
-                <rect x="14" y="14" width="7" height="7" rx="1" />
-            </svg>
-            Work Analysis
-        </a>
-        <a href="{{ url_for('client_statistics') }}" class="tab-btn" style="text-decoration: none;">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="18" y1="20" x2="18" y2="10" />
-                <line x1="12" y1="20" x2="12" y2="4" />
-                <line x1="6" y1="20" x2="6" y2="14" />
-            </svg>
-            Client Statistics
-        </a>
-        <button class="tab-btn" onclick="switchTab('holidays', event)">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                <line x1="16" y1="2" x2="16" y2="6" />
-                <line x1="8" y1="2" x2="8" y2="6" />
-                <line x1="3" y1="10" x2="21" y2="10" />
-            </svg>
-            Company Holidays
-        </button>
-        <a href="{{ url_for('manage_work_types') }}" class="tab-btn" style="text-decoration: none;">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M6 3h12M6 8h12M6 13l8.5 8M6 13h3a5 5 0 0 1 5-5" />
-            </svg>
-            Manage Rates
-        </a>
     </div>
 
     <!-- Submissions Tab -->
@@ -295,8 +210,13 @@
                                 <span class="quantity-badge">{{ submission['quantity'] or 1 }}</span>
                             </td>
                             <td>
-                                <div class="work-text">{{ submission['work_text'][:60] }}{% if
+                                <div class="work-text" title="{{ submission['work_text'] }}">{{ submission['work_text'][:60] }}{% if
                                     submission['work_text']|length > 60 %}...{% endif %}</div>
+                                {% if submission['past_submission_reason'] %}
+                                <div style="margin-top: 4px; font-size: 0.78rem; color: #b45309; background: #fef3c7; border: 1px solid #fde68a; padding: 2px 7px; border-radius: 4px; display: inline-block; max-width: 260px;" title="{{ submission['past_submission_reason'] }}">
+                                    <strong>Past Reason:</strong> {{ submission['past_submission_reason'][:60] }}{% if submission['past_submission_reason']|length > 60 %}...{% endif %}
+                                </div>
+                                {% endif %}
                             </td>
                             <td>
                                 {% if submission['file_path'] %}
@@ -1269,12 +1189,18 @@
             input.value = '';
         }
     }
-    {% if leave_status_filter or leave_type_filter or month_filter %}
     document.addEventListener('DOMContentLoaded', function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const requestedTab = urlParams.get('tab');
+        {% if leave_status_filter or leave_type_filter or month_filter %}
         if (typeof switchTab === 'function') {
             switchTab('leaves');
         }
+        {% else %}
+        if (requestedTab && document.getElementById(requestedTab + '-tab') && typeof switchTab === 'function') {
+            switchTab(requestedTab);
+        }
+        {% endif %}
     });
-    {% endif %}
 </script>
 {% endblock %}

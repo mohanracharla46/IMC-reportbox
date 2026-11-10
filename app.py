@@ -39,6 +39,9 @@ load_env_file()
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-in-production'  # Change this in production!
+AUTO_LOGOUT_HOURS = 10
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
+app.config['SESSION_REFRESH_EACH_REQUEST'] = False
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 ALLOWED_EXTENSIONS = {'txt', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'png', 'jpg', 'jpeg', 'gif'}
@@ -178,40 +181,31 @@ def format_time_12h(value):
         return value.strftime("%I:%M %p")
     return str(value)
 
+def parse_datetime_safe(value):
+    """Safely parse a datetime string or datetime object into a naive datetime."""
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value.replace(tzinfo=None) if value.tzinfo else value
+    if isinstance(value, str):
+        val = value.strip()
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
+            try:
+                return datetime.strptime(val.split('.')[0][:19], fmt)
+            except ValueError:
+                continue
+    return None
+
 def format_attendance_duration(login_time, logout_time=None):
     """
     Calculate duration between login_time and logout_time (or current time if logout_time is None).
     Returns string like '7 hrs 30 mins' or '8 hrs' or '0 mins', and float total_hours.
     """
-    if not login_time:
+    login_dt = parse_datetime_safe(login_time)
+    if not login_dt:
         return "0 hrs", 0.0
-    
-    if isinstance(login_time, str):
-        try:
-            val = login_time.split('.')[0]
-            login_dt = datetime.strptime(val, "%Y-%m-%d %H:%M:%S")
-        except Exception:
-            try:
-                login_dt = datetime.strptime(login_time[:19], "%Y-%m-%dT%H:%M:%S")
-            except Exception:
-                return "0 hrs", 0.0
-    else:
-        login_dt = login_time
 
-    if logout_time:
-        if isinstance(logout_time, str):
-            try:
-                val = logout_time.split('.')[0]
-                logout_dt = datetime.strptime(val, "%Y-%m-%d %H:%M:%S")
-            except Exception:
-                try:
-                    logout_dt = datetime.strptime(logout_time[:19], "%Y-%m-%dT%H:%M:%S")
-                except Exception:
-                    logout_dt = datetime.now()
-        else:
-            logout_dt = logout_time
-    else:
-        logout_dt = datetime.now()
+    logout_dt = parse_datetime_safe(logout_time) or datetime.now()
 
     if logout_dt < login_dt:
         logout_dt = login_dt
@@ -388,6 +382,7 @@ def init_db():
             file_path TEXT,
             date DATE NOT NULL,
             submission_number INTEGER DEFAULT 1,
+            past_submission_reason TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )
@@ -532,6 +527,7 @@ def init_db():
         ('work_type', 'submissions', 'TEXT'),
         ('quantity', 'submissions', 'INTEGER DEFAULT 1'),
         ('employee_name', 'submissions', 'TEXT'),
+        ('past_submission_reason', 'submissions', 'TEXT'),
         ('login_location', 'attendance', 'TEXT'),
         ('logout_location', 'attendance', 'TEXT')
     ]:
@@ -619,7 +615,157 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def close_expired_attendance_sessions(conn, user_id=None, now_dt=None):
+    """Auto-complete any active attendance sessions that have reached or exceeded AUTO_LOGOUT_HOURS."""
+    now_dt = now_dt or datetime.now()
+    limit_delta = timedelta(hours=AUTO_LOGOUT_HOURS)
+    if user_id is not None:
+        active_rows = execute_query(
+            conn,
+            'SELECT id, login_time FROM attendance WHERE user_id = ? AND status = ?',
+            (user_id, 'Active')
+        ).fetchall()
+    else:
+        active_rows = execute_query(
+            conn,
+            'SELECT id, login_time FROM attendance WHERE status = ?',
+            ('Active',)
+        ).fetchall()
+
+    updated = False
+    for row in active_rows:
+        login_dt = parse_datetime_safe(row['login_time'])
+        if login_dt and (now_dt - login_dt) >= limit_delta:
+            auto_logout_ts = (login_dt + limit_delta).strftime("%Y-%m-%d %H:%M:%S")
+            execute_query(
+                conn,
+                'UPDATE attendance SET logout_time = ?, logout_location = ?, total_hours = ?, status = ? WHERE id = ?',
+                (auto_logout_ts, f'Auto Logout ({AUTO_LOGOUT_HOURS} hrs)', float(AUTO_LOGOUT_HOURS), 'Completed', row['id'])
+            )
+            updated = True
+
+    if updated and get_db_info()[1] == '?':
+        conn.commit()
+
+
+def get_employee_login_dt():
+    """Return the active login datetime for the logged-in non-admin session, initializing if absent."""
+    login_dt = parse_datetime_safe(session.get('login_at'))
+    if login_dt:
+        return login_dt
+
+    att_id = session.get('attendance_id')
+    if att_id:
+        try:
+            conn = get_db_connection()
+            att = execute_query(conn, 'SELECT login_time FROM attendance WHERE id = ?', (att_id,)).fetchone()
+            conn.close()
+            if att:
+                login_dt = parse_datetime_safe(att['login_time'])
+                if login_dt:
+                    session['login_at'] = login_dt.strftime("%Y-%m-%d %H:%M:%S")
+                    return login_dt
+        except Exception as e:
+            print(f"Error resolving attendance login_time: {e}")
+
+    now_dt = datetime.now()
+    session['login_at'] = now_dt.strftime("%Y-%m-%d %H:%M:%S")
+    session.permanent = True
+    return now_dt
+
+
+def perform_auto_logout(user_id, att_id=None, login_dt=None):
+    """Close expired attendance records and clear the user session for 10-hour auto-logout."""
+    now_dt = datetime.now()
+    try:
+        conn = get_db_connection()
+        close_expired_attendance_sessions(conn, user_id=user_id, now_dt=now_dt)
+        if att_id:
+            att = execute_query(conn, 'SELECT id, login_time, status FROM attendance WHERE id = ?', (att_id,)).fetchone()
+            if att and att['status'] == 'Active':
+                att_login_dt = parse_datetime_safe(att['login_time']) or login_dt or now_dt
+                auto_logout_dt = min(now_dt, att_login_dt + timedelta(hours=AUTO_LOGOUT_HOURS))
+                _, raw_hours = format_attendance_duration(att_login_dt, auto_logout_dt)
+                execute_query(
+                    conn,
+                    'UPDATE attendance SET logout_time = ?, logout_location = ?, total_hours = ?, status = ? WHERE id = ?',
+                    (auto_logout_dt.strftime("%Y-%m-%d %H:%M:%S"), f'Auto Logout ({AUTO_LOGOUT_HOURS} hrs)', raw_hours, 'Completed', att['id'])
+                )
+                if get_db_info()[1] == '?':
+                    conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Auto-logout attendance tracking error: {e}")
+    session.clear()
+
+
+@app.before_request
+def enforce_employee_session_timeout():
+    """Automatically log out non-admin employees once 10 hours have elapsed since login."""
+    if request.endpoint in ('static', 'manifest', 'service_worker', 'offline'):
+        return None
+    if 'user_id' not in session or session.get('role') == 'admin':
+        return None
+
+    login_dt = get_employee_login_dt()
+    if login_dt and (datetime.now() - login_dt) >= timedelta(hours=AUTO_LOGOUT_HOURS):
+        perform_auto_logout(session['user_id'], session.get('attendance_id'), login_dt)
+        if request.path.startswith('/api/') or request.is_json:
+            return jsonify({'error': f'Session expired after {AUTO_LOGOUT_HOURS} hours. Please log in again.'}), 401
+        flash(f'Your {AUTO_LOGOUT_HOURS}-hour session has ended. You have been automatically logged out. Please log in again.', 'error')
+        return redirect(url_for('login'))
+    return None
+
+
+@app.context_processor
+def inject_session_timeout():
+    """Provide remaining milliseconds until automatic 10-hour logout and admin sidebar context."""
+    ctx = {'auto_logout_remaining_ms': None, 'admin_pending_leaves_count': 0}
+    if 'user_id' in session:
+        if session.get('role') != 'admin':
+            login_dt = parse_datetime_safe(session.get('login_at'))
+            if login_dt:
+                expiry_dt = login_dt + timedelta(hours=AUTO_LOGOUT_HOURS)
+                ctx['auto_logout_remaining_ms'] = max(0, int((expiry_dt - datetime.now()).total_seconds() * 1000))
+        else:
+            try:
+                conn = get_db_connection()
+                row = execute_query(conn, "SELECT COUNT(*) as cnt FROM leaves WHERE status = ?", ('Pending',)).fetchone()
+                conn.close()
+                if row:
+                    ctx['admin_pending_leaves_count'] = row['cnt']
+            except Exception:
+                pass
+    return ctx
+
+
 # Routes
+@app.route('/manifest.webmanifest')
+def manifest():
+    """Serve the Web App Manifest from root scope with proper MIME type"""
+    return send_from_directory(
+        os.path.join(app.root_path, 'static'),
+        'manifest.webmanifest',
+        mimetype='application/manifest+json'
+    )
+
+@app.route('/sw.js')
+def service_worker():
+    """Serve the Service Worker from root so its scope covers the entire app"""
+    response = send_from_directory(
+        os.path.join(app.root_path, 'static'),
+        'sw.js',
+        mimetype='application/javascript'
+    )
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Service-Worker-Allowed'] = '/'
+    return response
+
+@app.route('/offline')
+def offline():
+    """Offline fallback page cached by the Service Worker"""
+    return render_template('offline.html')
+
 @app.route('/')
 def index():
     """Redirect to appropriate dashboard based on login status"""
@@ -643,6 +789,11 @@ def dashboard():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     """Handle user login"""
+    if request.method == 'GET' and 'user_id' in session:
+        if session.get('role') == 'admin':
+            return redirect(url_for('admin_dashboard'))
+        return redirect(url_for('employee_dashboard'))
+
     if request.method == 'POST':
         name = request.form.get('name')
         password = request.form.get('password')
@@ -668,19 +819,24 @@ def login():
                     flash('Location permission is required to sign in. Please allow location access in your browser settings and try again.', 'error')
                     return render_template('login.html')
 
+            session.clear()
+            session.permanent = True
             session['user_id'] = user['id']
             session['user_name'] = user['name']
             session['user_email'] = user['email']
             session['role'] = user['role']
             session['employment_type'] = dict(user).get('employment_type', 'inhouse')
+            now_dt = datetime.now()
+            now_ts = now_dt.strftime("%Y-%m-%d %H:%M:%S")
+            session['login_at'] = now_ts
             
             # Attendance login tracking (Not required for admin)
             if user['role'] != 'admin':
                 try:
                     today_str = date.today().isoformat()
-                    now_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     conn = get_db_connection()
-                    # Check for existing active attendance session today
+                    close_expired_attendance_sessions(conn, user_id=user['id'], now_dt=now_dt)
+                    # Check for existing active attendance session today (< 10 hours)
                     active_att = execute_query(conn,
                         'SELECT * FROM attendance WHERE user_id = ? AND date = ? AND status = ? ORDER BY id DESC LIMIT 1',
                         (user['id'], today_str, 'Active')
@@ -688,6 +844,9 @@ def login():
                     
                     if active_att:
                         session['attendance_id'] = active_att['id']
+                        att_login_dt = parse_datetime_safe(active_att['login_time'])
+                        if att_login_dt:
+                            session['login_at'] = att_login_dt.strftime("%Y-%m-%d %H:%M:%S")
                         # Update login location if missing
                         if not dict(active_att).get('login_location') and login_loc != 'Location Access Denied':
                             execute_query(conn, 'UPDATE attendance SET login_location = ? WHERE id = ?', (login_loc, active_att['id']))
@@ -724,6 +883,22 @@ def login():
             return redirect(url_for('employee_dashboard'))
     
     return render_template('login.html')
+
+@app.route('/auto-logout')
+def auto_logout():
+    """Automatically log out an employee once 10 hours have elapsed since login"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    if session.get('role') == 'admin':
+        return redirect(url_for('admin_dashboard'))
+
+    login_dt = get_employee_login_dt()
+    if login_dt and (datetime.now() - login_dt) >= timedelta(hours=AUTO_LOGOUT_HOURS):
+        perform_auto_logout(session['user_id'], session.get('attendance_id'), login_dt)
+        flash(f'Your {AUTO_LOGOUT_HOURS}-hour session has ended. You have been automatically logged out. Please log in again.', 'error')
+        return redirect(url_for('login'))
+
+    return redirect(url_for('employee_dashboard'))
 
 @app.route('/logout')
 @login_required
@@ -877,6 +1052,9 @@ def employee_dashboard():
     clients_raw = execute_query(conn, "SELECT name FROM clients ORDER BY name").fetchall()
     all_clients = [r['name'] for r in clients_raw]
     
+    # Close any stale active sessions (>= 10 hrs) before displaying attendance
+    close_expired_attendance_sessions(conn, user_id=session['user_id'])
+
     # Attendance summary for today
     today_att_raw = execute_query(conn,
         'SELECT * FROM attendance WHERE user_id = ? AND date = ? ORDER BY id DESC LIMIT 1',
@@ -1011,27 +1189,36 @@ def submit_report():
     work_type = request.form.get('work_type', '').strip()
     other_work_type_name = request.form.get('other_work_type_name', '').strip()
     quantity = request.form.get('quantity', 1)
+    past_submission_reason = request.form.get('past_submission_reason', '').strip()
     
-    today = date.today().isoformat()
-    submission_date = request.form.get('submission_date')
+    today_date = date.today()
+    today = today_date.isoformat()
+    submission_date = request.form.get('submission_date', '').strip()
     
-    if emp_type == 'freelancer':
-        # Freelancer can edit/select submission date (including past dates)
-        if submission_date:
-            try:
-                submission_dt = datetime.strptime(submission_date, '%Y-%m-%d').date()
-                if submission_dt > date.today():
-                    flash('Cannot submit reports for future dates.', 'error')
-                    return redirect(url_for('employee_dashboard'))
-                today = submission_date
-            except ValueError:
-                pass # Keep today as default if invalid format
-    else:
-        # In-house employees are restricted to today's date only
-        if submission_date and submission_date != today:
-            flash('In-house employees are not permitted to change or edit the submission date.', 'error')
+    if submission_date:
+        try:
+            submission_dt = datetime.strptime(submission_date, '%Y-%m-%d').date()
+            if submission_dt > today_date:
+                flash('Cannot submit reports for future dates.', 'error')
+                return redirect(url_for('employee_dashboard'))
+            today = submission_dt.isoformat()
+        except ValueError:
+            flash('Invalid submission date format.', 'error')
             return redirect(url_for('employee_dashboard'))
-        today = date.today().isoformat()
+    else:
+        submission_dt = today_date
+
+    if emp_type == 'freelancer':
+        # Freelancers can submit past dates without a mandatory reason
+        past_submission_reason = past_submission_reason or None
+    else:
+        # In-house employees can submit past dates only with a mandatory valid reason
+        if submission_dt < today_date:
+            if not past_submission_reason:
+                flash('Please provide a valid reason for submitting a past date work report.', 'error')
+                return redirect(url_for('employee_dashboard'))
+        else:
+            past_submission_reason = None
     
     # Handle 'Other' client name
     if client_name in ['Others', 'Other'] and other_client_name:
@@ -1069,10 +1256,10 @@ def submit_report():
     
     if existing_check:
         conn.close()
-        flash('You have already submitted an identical report today.', 'info')
+        flash(f'You have already submitted an identical report for {today}.', 'info')
         return redirect(url_for('employee_dashboard'))
     
-    # Get submission count for today to set submission_number
+    # Get submission count for target date to set submission_number
     res = execute_query(conn, 
         'SELECT COUNT(*) as count FROM submissions WHERE user_id = ? AND date = ?',
         (session['user_id'], today)
@@ -1084,11 +1271,14 @@ def submit_report():
     # Insert new submission
     try:
         execute_query(conn, 
-            'INSERT INTO submissions (user_id, work_text, client_category, client_name, work_type, quantity, file_path, date, submission_number, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            (session['user_id'], work_text, client_category, client_name, work_type, quantity, file_path, today, submission_number, datetime.now())
+            'INSERT INTO submissions (user_id, work_text, client_category, client_name, work_type, quantity, file_path, date, submission_number, created_at, past_submission_reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            (session['user_id'], work_text, client_category, client_name, work_type, quantity, file_path, today, submission_number, datetime.now(), past_submission_reason)
         )
         conn.commit()
-        flash(f'Work report #{submission_number} submitted successfully!', 'success')
+        if submission_dt < today_date:
+            flash(f'Past work report #{submission_number} for {today} submitted successfully!', 'success')
+        else:
+            flash(f'Work report #{submission_number} submitted successfully!', 'success')
     except Exception as e:
         flash(f'Error submitting report: {str(e)}', 'error')
     finally:
@@ -1525,6 +1715,9 @@ def admin_dashboard():
     clients_raw = execute_query(conn, "SELECT name FROM clients ORDER BY name").fetchall()
     all_clients = [r['name'] for r in clients_raw]
     
+    # Auto-close any expired active attendance sessions (>= 10 hrs)
+    close_expired_attendance_sessions(conn)
+
     # Fetch attendance logs for Admin (Employees only)
     att_query = '''
         SELECT a.*, u.name as user_name, u.email as user_email, u.role, u.employment_type
@@ -2166,6 +2359,7 @@ def download_monthly_report(employee_id):
                s.work_type as "Work Type",
                s.quantity as "Qty",
                s.work_text as "Description",
+               COALESCE(s.past_submission_reason, '') as "Past Submission Reason",
                s.created_at as "Submitted At"
         FROM submissions s 
         WHERE s.user_id = ? AND strftime('%Y-%m', s.date) = ?
@@ -2261,6 +2455,7 @@ def download_filtered_reports():
                s.work_type as "Work Type",
                s.quantity as "Qty",
                s.work_text as "Description",
+               COALESCE(s.past_submission_reason, '') as "Past Submission Reason",
                s.created_at as "Submitted At"
         FROM submissions s
         JOIN users u ON s.user_id = u.id
@@ -2296,8 +2491,8 @@ def download_filtered_reports():
     # ... logic to calculate amount ...
     df['Amount'] = df.apply(lambda row: calculate_submission_amount(row['Work Type'], row['Qty'], row['Type']), axis=1)
     
-    # Reorder columns: Date, Employee Name, Type, Category, Client, Work Type, Qty, Amount, Description, Submitted At
-    desired_order = ['Date', 'Employee Name', 'Type', 'Category', 'Client', 'Work Type', 'Qty', 'Amount', 'Description', 'Submitted At']
+    # Reorder columns: Date, Employee Name, Type, Category, Client, Work Type, Qty, Amount, Description, Past Submission Reason, Submitted At
+    desired_order = ['Date', 'Employee Name', 'Type', 'Category', 'Client', 'Work Type', 'Qty', 'Amount', 'Description', 'Past Submission Reason', 'Submitted At']
     # Filter only columns that exist
     final_cols = [c for c in desired_order if c in df.columns]
     df = df[final_cols]
@@ -2392,6 +2587,7 @@ def edit_report(report_id):
         work_type = request.form.get('work_type', '').strip()
         other_work_type_name = request.form.get('other_work_type_name', '').strip()
         quantity = request.form.get('quantity', '1')
+        past_submission_reason = report.get('past_submission_reason')
 
         # Allow date editing for freelancers and admin only
         report_date = report['date']
@@ -2407,6 +2603,14 @@ def edit_report(report_id):
                     report_date = new_date
                 except ValueError:
                     pass
+            if 'past_submission_reason' in request.form:
+                past_submission_reason = request.form.get('past_submission_reason', '').strip() or None
+        elif report.get('past_submission_reason'):
+            past_submission_reason = request.form.get('past_submission_reason', '').strip()
+            if not past_submission_reason:
+                flash('Please provide a valid reason for submitting a past date work report.', 'error')
+                conn.close()
+                return render_template('edit_report.html', report=report, now=datetime.now())
 
         if client_name in ['Others', 'Other'] and other_client_name:
             client_name = other_client_name
@@ -2431,8 +2635,8 @@ def edit_report(report_id):
             try:
                 ensure_client_exists(conn, client_name, client_category)
                 execute_query(conn, 
-                    '''UPDATE submissions SET work_text = ?, file_path = ?, client_category = ?, client_name = ?, work_type = ?, quantity = ?, date = ? WHERE id = ?''',
-                    (work_text, file_path, client_category, client_name, work_type, quantity, report_date, report_id)
+                    '''UPDATE submissions SET work_text = ?, file_path = ?, client_category = ?, client_name = ?, work_type = ?, quantity = ?, date = ?, past_submission_reason = ? WHERE id = ?''',
+                    (work_text, file_path, client_category, client_name, work_type, quantity, report_date, past_submission_reason, report_id)
                 )
                 conn.commit()
                 flash('Report updated successfully!', 'success')
@@ -2481,7 +2685,8 @@ def get_filtered_work_analysis_query_and_params(request_args):
         filter_client = other_client
     query = '''
         SELECT s.date, COALESCE(s.employee_name, u.name) as empname, s.client_name as client,
-               s.work_type as worktype, s.quantity, u.employment_type, s.work_text as description
+               s.work_type as worktype, s.quantity, u.employment_type, s.work_text as description,
+               s.past_submission_reason
         FROM submissions s LEFT JOIN users u ON s.user_id = u.id WHERE 1=1
     '''
     params = []
@@ -2588,7 +2793,8 @@ def export_work_analysis():
                 'Work Type': r.get('worktype') or '—', 
                 'Quantity': r.get('quantity') or 0, 
                 'Price (₹)': price, 
-                'Description': r.get('description') or ''
+                'Description': r.get('description') or '',
+                'Past Submission Reason': r.get('past_submission_reason') or ''
             })
             total_qty += int(r.get('quantity') or 0)
             total_price += price
@@ -2618,7 +2824,7 @@ def export_work_analysis():
                 cell.alignment = center_align
                 
             # Highlight totals
-            for col in range(1, 9):
+            for col in range(1, 10):
                 cell = worksheet.cell(row=last_row, column=col)
                 cell.font = bold_font
                 if col in [6, 7]:

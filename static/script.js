@@ -336,7 +336,7 @@ function formatFileSize(bytes) {
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
 }
 
-// ========== Tab Switching ==========
+// ========== Tab Switching & CRM Sidebar ==========
 function switchTab(tabName, eventObj = null) {
     // Hide all tab contents
     const tabContents = document.querySelectorAll('.tab-content');
@@ -344,8 +344,8 @@ function switchTab(tabName, eventObj = null) {
         content.classList.remove('active');
     });
 
-    // Remove active class from all tab buttons
-    const tabButtons = document.querySelectorAll('.tab-btn');
+    // Remove active class from all tab / CRM sidebar items
+    const tabButtons = document.querySelectorAll('.tab-btn, .crm-nav-item');
     tabButtons.forEach(button => {
         button.classList.remove('active');
     });
@@ -354,22 +354,103 @@ function switchTab(tabName, eventObj = null) {
     const selectedTab = document.getElementById(`${tabName}-tab`);
     if (selectedTab) {
         selectedTab.classList.add('active');
-        // Add animation class
         selectedTab.classList.remove('scale-up');
-        void selectedTab.offsetWidth; // Trigger reflow
+        void selectedTab.offsetWidth;
         selectedTab.classList.add('scale-up');
     }
 
-    // Add active class to clicked button
-    const evt = eventObj || window.event;
-    if (evt && evt.currentTarget) {
-        evt.currentTarget.classList.add('active');
-    } else if (evt && evt.target) {
-        // Fallback for cases where currentTarget might be lost
-        const btn = evt.target.closest('.tab-btn');
-        if (btn) btn.classList.add('active');
+    // Add active class to matching nav button (supports programmatic & stat-card calls)
+    const targetBtn = document.querySelector(`.crm-nav-item[data-tab="${tabName}"], .tab-btn[data-tab="${tabName}"]`);
+    if (targetBtn) {
+        targetBtn.classList.add('active');
+    } else {
+        const evt = eventObj || window.event;
+        if (evt && evt.currentTarget && evt.currentTarget.classList && (evt.currentTarget.classList.contains('crm-nav-item') || evt.currentTarget.classList.contains('tab-btn'))) {
+            evt.currentTarget.classList.add('active');
+        } else if (evt && evt.target) {
+            const btn = evt.target.closest('.crm-nav-item, .tab-btn');
+            if (btn) btn.classList.add('active');
+        }
+    }
+
+    // Close mobile sidebar drawer after choosing a section
+    if (window.innerWidth <= 960 && typeof closeAdminSidebarMobile === 'function') {
+        closeAdminSidebarMobile();
     }
 }
+
+function updateSidebarToggleState() {
+    const shell = document.getElementById('crm-shell');
+    const sidebar = document.getElementById('crm-sidebar');
+    const topBtn = document.getElementById('admin-nav-sidebar-toggle');
+    const sideBtn = document.getElementById('admin-sidebar-collapse-btn');
+    if (!shell || !sidebar) return;
+
+    const isMobile = window.innerWidth <= 960;
+    const isExpanded = isMobile
+        ? sidebar.classList.contains('mobile-open')
+        : !shell.classList.contains('sidebar-collapsed');
+
+    [topBtn, sideBtn].forEach(btn => {
+        if (!btn) return;
+        btn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+        btn.classList.toggle('is-collapsed', !isExpanded);
+    });
+}
+
+function closeAdminSidebarMobile() {
+    const sidebar = document.getElementById('crm-sidebar');
+    const backdrop = document.getElementById('admin-sidebar-backdrop');
+    if (sidebar) sidebar.classList.remove('mobile-open');
+    if (backdrop) backdrop.classList.remove('active');
+    document.body.classList.remove('no-scroll');
+    updateSidebarToggleState();
+}
+
+function toggleAdminSidebar() {
+    const shell = document.getElementById('crm-shell');
+    const sidebar = document.getElementById('crm-sidebar');
+    const backdrop = document.getElementById('admin-sidebar-backdrop');
+    if (!shell || !sidebar) return;
+
+    if (window.innerWidth <= 960) {
+        const willOpen = !sidebar.classList.contains('mobile-open');
+        sidebar.classList.toggle('mobile-open', willOpen);
+        if (backdrop) backdrop.classList.toggle('active', willOpen);
+        document.body.classList.toggle('no-scroll', willOpen);
+    } else {
+        const willCollapse = !shell.classList.contains('sidebar-collapsed');
+        shell.classList.toggle('sidebar-collapsed', willCollapse);
+        try {
+            localStorage.setItem('ira_admin_sidebar_collapsed', willCollapse ? '1' : '0');
+        } catch (e) {}
+    }
+    updateSidebarToggleState();
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    const shell = document.getElementById('crm-shell');
+    if (shell) {
+        try {
+            if (localStorage.getItem('ira_admin_sidebar_collapsed') === '1') {
+                shell.classList.add('sidebar-collapsed');
+            }
+        } catch (e) {}
+        updateSidebarToggleState();
+        window.addEventListener('resize', function () {
+            if (window.innerWidth > 960) {
+                closeAdminSidebarMobile();
+            } else {
+                updateSidebarToggleState();
+            }
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                closeAdminSidebarMobile();
+            }
+        });
+    }
+});
 
 // ========== Modal Functions ==========
 function initializeModals() {

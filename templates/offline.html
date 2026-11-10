@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}Offline - IRA MEDIA CONCEPTS{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-card" style="text-align: center;">
+        <div class="auth-header" style="margin-bottom: 1.5rem;">
+            <div class="auth-logo-container">
+                <img src="{{ url_for('static', filename='images/logo.png') }}" alt="IRA MEDIA CONCEPTS"
+                    class="auth-logo-img">
+            </div>
+            <div style="width: 68px; height: 68px; margin: 1.25rem auto 1rem auto; border-radius: 50%; background: var(--primary-50); border: 1px solid var(--primary-200); display: flex; align-items: center; justify-content: center; color: var(--primary-600);">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                    <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" />
+                    <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" />
+                    <path d="M10.71 5.05A16 16 0 0 1 22.58 9" />
+                    <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" />
+                    <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+                    <line x1="12" y1="20" x2="12.01" y2="20" />
+                </svg>
+            </div>
+            <h1 class="auth-title" style="font-size: 1.6rem;">You're Offline</h1>
+            <p class="auth-subtitle" style="margin-top: 0.5rem;">
+                You're currently offline. Please check your internet connection.
+            </p>
+        </div>
+
+        <p id="offline-status-msg" style="font-size: 0.875rem; color: var(--gray-500); margin-bottom: 1.5rem; line-height: 1.5;">
+            Reconnect to Wi-Fi or mobile data to load your dashboard and submit work reports.
+        </p>
+
+        <button type="button" id="offline-retry-btn" class="btn btn-primary btn-full">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <polyline points="23 4 23 10 17 10" />
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+            </svg>
+            <span>Retry Connection</span>
+        </button>
+    </div>
+
+    <div class="auth-decoration">
+        <div class="decoration-circle circle-1"></div>
+        <div class="decoration-circle circle-2"></div>
+        <div class="decoration-circle circle-3"></div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        const retryBtn = document.getElementById('offline-retry-btn');
+        const statusMsg = document.getElementById('offline-status-msg');
+
+        async function attemptReconnect() {
+            if (!retryBtn) return;
+            const originalHtml = retryBtn.innerHTML;
+            retryBtn.disabled = true;
+            retryBtn.innerHTML = 'Checking connection...';
+
+            try {
+                const res = await fetch('/', { method: 'GET', cache: 'no-store' });
+                if (res.ok || res.redirected) {
+                    window.location.href = '/';
+                    return;
+                }
+            } catch (e) {
+                // Still offline
+            }
+
+            retryBtn.disabled = false;
+            retryBtn.innerHTML = originalHtml;
+            if (statusMsg) {
+                statusMsg.textContent = 'Still offline. Please verify your internet connection and try again.';
+                statusMsg.style.color = 'var(--error)';
+            }
+        }
+
+        if (retryBtn) {
+            retryBtn.addEventListener('click', attemptReconnect);
+        }
+
+        window.addEventListener('online', function () {
+            window.location.reload();
+        });
+    })();
+</script>
+{% endblock %}
+

@@ -188,7 +188,14 @@
                         </span>
                     </td>
                     {% endif %}
-                    <td style="max-width: 300px;">{{ submission['work_text'] }}</td>
+                    <td style="max-width: 300px;">
+                        {{ submission['work_text'] }}
+                        {% if submission['past_submission_reason'] %}
+                        <div style="margin-top: 4px; font-size: 0.78rem; color: #b45309; background: #fef3c7; border: 1px solid #fde68a; padding: 2px 7px; border-radius: 4px;">
+                            <strong>Past Reason:</strong> {{ submission['past_submission_reason'] }}
+                        </div>
+                        {% endif %}
+                    </td>
                     <td>
                         {% if submission['file_path'] %}
                         <a href="{{ url_for('download_file', filename=submission['file_path']|filename) }}" class="file-link" style="font-size: 0.8rem;">

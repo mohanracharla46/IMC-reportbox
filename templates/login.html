@@ -16,7 +16,7 @@
 
         <form method="POST" class="auth-form" id="login-form">
             <input type="hidden" id="login_location" name="login_location" value="">
-            
+
             <div class="form-group">
                 <label for="name" class="form-label">Name</label>
                 <input type="text" id="name" name="name" class="form-input" placeholder="Enter your name" required
@@ -29,8 +29,10 @@
             </div>
 
             <!-- Mandatory Location Status Box -->
-            <div id="location-status-box" style="margin-bottom: 1.25rem; padding: 0.85rem 1rem; border-radius: 12px; font-size: 0.85rem; display: flex; align-items: center; gap: 10px; background: #fffbeb; border: 1px solid #fde68a; color: #b45309; font-weight: 500; transition: all 0.3s ease;">
-                <span id="location-icon" style="display: inline-flex; align-items: center; justify-content: center;">⏳</span>
+            <div id="location-status-box"
+                style="margin-bottom: 1.25rem; padding: 0.85rem 1rem; border-radius: 12px; font-size: 0.85rem; display: flex; align-items: center; gap: 10px; background: #fffbeb; border: 1px solid #fde68a; color: #b45309; font-weight: 500; transition: all 0.3s ease;">
+                <span id="location-icon"
+                    style="display: inline-flex; align-items: center; justify-content: center;">⏳</span>
                 <span id="location-status-text">Requesting live location...</span>
             </div>
 
@@ -40,6 +42,18 @@
                     <path d="M5 12h14" />
                     <path d="m12 5 7 7-7 7" />
                 </svg>
+            </button>
+
+            <button type="button" id="login-install-btn" class="btn btn-ghost btn-full pwa-install-btn" data-pwa-install
+                data-install-display="inline-flex"
+                style="display: none; margin-top: 0.75rem; border: 1px solid var(--primary-300); color: var(--primary-700);"
+                aria-label="Install App">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                <span>Install App</span>
             </button>
         </form>
 
@@ -60,13 +74,13 @@
                             return parts.join(', ');
                         }
                     }
-                } catch(e) {
+                } catch (e) {
                     console.log("Reverse geocode fallback", e);
                 }
                 return `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
             }
 
-            document.addEventListener('DOMContentLoaded', function() {
+            document.addEventListener('DOMContentLoaded', function () {
                 const form = document.getElementById('login-form');
                 const locInput = document.getElementById('login_location');
                 const statusBox = document.getElementById('location-status-box');
@@ -93,11 +107,11 @@
                     }
 
                     navigator.geolocation.getCurrentPosition(
-                        async function(pos) {
+                        async function (pos) {
                             const lat = pos.coords.latitude;
                             const lng = pos.coords.longitude;
                             statusText.textContent = 'Location detected. Resolving address...';
-                            
+
                             const locName = await getReverseGeocode(lat, lng);
                             locInput.value = locName;
                             isLocationReady = true;
@@ -111,7 +125,7 @@
 
                             if (onSuccess) onSuccess();
                         },
-                        function(err) {
+                        function (err) {
                             isLocationReady = false;
                             isLocationDenied = true;
                             locInput.value = '';
@@ -130,7 +144,7 @@
                 fetchLocation();
 
                 // Form submit handler - block login if location permission is declined or not ready
-                form.addEventListener('submit', function(e) {
+                form.addEventListener('submit', function (e) {
                     if (!isLocationReady || isLocationDenied || !locInput.value) {
                         e.preventDefault();
                         if (isLocationDenied) {

@@ -423,7 +423,14 @@
                     <td>{{ row.worktype }}</td>
                     <td class="num"><span class="wa-qty">{{ row.quantity }}</span></td>
                     <td class="num">₹{{ row.price }}</td>
-                    <td>{{ row.description }}</td>
+                    <td>
+                        {{ row.description }}
+                        {% if row.past_submission_reason %}
+                        <div style="margin-top: 4px; font-size: 0.78rem; color: #b45309; background: #fef3c7; border: 1px solid #fde68a; padding: 2px 7px; border-radius: 4px;">
+                            <strong>Past Reason:</strong> {{ row.past_submission_reason }}
+                        </div>
+                        {% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
