@@ -309,10 +309,28 @@ def merge_attendance_with_leaves(conn, attendance_logs, user_id=None, limit=150)
     merged.sort(key=lambda x: str(x['date']), reverse=True)
     return merged[:limit]
 
+def location_map_url(value):
+    """Extract embedded GPS coordinates from a location string and return a Google Maps URL."""
+    if not value or not isinstance(value, str):
+        return ""
+    match = re.search(r'(?:\(|Lat:\s*)(-?\d+(?:\.\d+)?)\s*,\s*(?:Lng:\s*)?(-?\d+(?:\.\d+)?)\)?', value)
+    if not match:
+        return ""
+    try:
+        lat = float(match.group(1))
+        lng = float(match.group(2))
+        if -90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0:
+            return f"https://www.google.com/maps?q={lat:.6f},{lng:.6f}"
+    except ValueError:
+        pass
+    return ""
+
+
 app.jinja_env.globals.update(calculate_submission_amount=calculate_submission_amount)
 app.jinja_env.filters['format_dt'] = format_datetime_filter
 app.jinja_env.filters['filename'] = get_filename_filter
 app.jinja_env.filters['format_time_12h'] = format_time_12h
+app.jinja_env.filters['location_map_url'] = location_map_url
 
 # Database helper
 def format_streak_dates(raw_data):

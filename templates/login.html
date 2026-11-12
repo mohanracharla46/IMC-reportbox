@@ -32,8 +32,12 @@
             <div id="location-status-box"
                 style="margin-bottom: 1.25rem; padding: 0.85rem 1rem; border-radius: 12px; font-size: 0.85rem; display: flex; align-items: center; gap: 10px; background: #fffbeb; border: 1px solid #fde68a; color: #b45309; font-weight: 500; transition: all 0.3s ease;">
                 <span id="location-icon"
-                    style="display: inline-flex; align-items: center; justify-content: center;">⏳</span>
-                <span id="location-status-text">Requesting live location...</span>
+                    style="display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">⏳</span>
+                <span id="location-status-text" style="flex: 1; line-height: 1.35;">Acquiring exact GPS location...</span>
+                <button type="button" id="location-refresh-btn" title="Refresh exact GPS location"
+                    style="flex-shrink: 0; background: transparent; border: 1px solid currentColor; color: inherit; border-radius: 8px; padding: 3px 8px; font-size: 0.75rem; font-weight: 600; cursor: pointer; opacity: 0.85;">
+                    ↻ Refresh
+                </button>
             </div>
 
             <button type="submit" id="submit-btn" class="btn btn-primary btn-full">
@@ -58,104 +62,222 @@
         </form>
 
         <script>
-            async function getReverseGeocode(lat, lng) {
-                try {
-                    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=14`, {
-                        headers: { 'Accept-Language': 'en' }
-                    });
-                    if (res.ok) {
-                        const data = await res.json();
-                        const addr = data.address || {};
-                        const area = addr.suburb || addr.neighbourhood || addr.city_district || addr.town || addr.village || addr.city || '';
-                        const city = addr.city || addr.town || addr.state_district || addr.county || '';
-                        const state = addr.state || '';
-                        let parts = [area, city, state].filter(Boolean);
-                        if (parts.length > 0) {
-                            return parts.join(', ');
-                        }
-                    }
-                } catch (e) {
-                    console.log("Reverse geocode fallback", e);
-                }
-                return `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
-            }
-
             document.addEventListener('DOMContentLoaded', function () {
                 const form = document.getElementById('login-form');
                 const locInput = document.getElementById('login_location');
                 const statusBox = document.getElementById('location-status-box');
                 const statusText = document.getElementById('location-status-text');
                 const icon = document.getElementById('location-icon');
+                const refreshBtn = document.getElementById('location-refresh-btn');
+                const submitBtn = document.getElementById('submit-btn');
+                const defaultSubmitHtml = submitBtn ? submitBtn.innerHTML : '';
 
                 let isLocationReady = false;
                 let isLocationDenied = false;
+                let isFetching = false;
+                let pendingSubmit = false;
+                let geocodeSeq = 0;
+                let stopBackgroundWatch = function () {};
 
-                function fetchLocation(onSuccess, onError) {
-                    isLocationReady = false;
-                    isLocationDenied = false;
-                    locInput.value = '';
-
-                    if (!navigator.geolocation) {
-                        isLocationDenied = true;
+                function setStatusStyle(type) {
+                    if (type === 'loading') {
+                        statusBox.style.background = '#fffbeb';
+                        statusBox.style.borderColor = '#fde68a';
+                        statusBox.style.color = '#b45309';
+                    } else if (type === 'success') {
+                        statusBox.style.background = 'rgba(34, 197, 94, 0.1)';
+                        statusBox.style.borderColor = 'rgba(34, 197, 94, 0.3)';
+                        statusBox.style.color = '#16a34a';
+                    } else {
                         statusBox.style.background = 'rgba(239, 68, 68, 0.1)';
                         statusBox.style.borderColor = 'rgba(239, 68, 68, 0.3)';
                         statusBox.style.color = '#dc2626';
+                    }
+                }
+
+                function resetSubmitButton() {
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = defaultSubmitHtml;
+                    }
+                }
+
+                async function applyResolvedPosition(pos) {
+                    const seq = ++geocodeSeq;
+                    const lat = pos.coords.latitude;
+                    const lng = pos.coords.longitude;
+                    const accuracy = Number.isFinite(pos.coords.accuracy) ? Math.round(pos.coords.accuracy) : null;
+
+                    if (!isLocationReady) {
+                        statusText.textContent = accuracy !== null
+                            ? `Coordinates locked (±${accuracy}m). Resolving exact address...`
+                            : 'Coordinates locked. Resolving exact address...';
+                    }
+
+                    const locName = await window.GeoLocationHelper.reverseGeocodeExact(lat, lng);
+                    if (seq !== geocodeSeq) return;
+
+                    locInput.value = locName;
+                    isLocationReady = true;
+                    isLocationDenied = false;
+
+                    setStatusStyle('success');
+                    icon.textContent = '📍';
+                    statusText.textContent = accuracy !== null
+                        ? `Location Verified (±${accuracy}m): ${locName}`
+                        : `Location Verified: ${locName}`;
+                }
+
+                function openLoginPermissionModal(message) {
+                    if (typeof window.setLocationModalMessage === 'function') {
+                        window.setLocationModalMessage(
+                            message || 'Location permission is required to sign in. Please allow location access and retry.'
+                        );
+                    }
+                    window.locationModalRetryHandler = async function () {
+                        const retryBtn = document.getElementById('location-modal-retry-btn');
+                        if (retryBtn) {
+                            retryBtn.innerHTML = '⏳ Requesting Exact Location...';
+                            retryBtn.disabled = true;
+                        }
+                        await fetchLocation({ forceRefresh: true });
+                        if (retryBtn) {
+                            retryBtn.innerHTML = '📍 Allow Location & Retry';
+                            retryBtn.disabled = false;
+                        }
+                        if (isLocationReady && typeof closeModal === 'function') {
+                            closeModal('locationPermissionModal');
+                        }
+                    };
+                    if (typeof showModal === 'function') {
+                        showModal('locationPermissionModal');
+                    } else {
+                        const m = document.getElementById('locationPermissionModal');
+                        if (m) m.classList.add('active');
+                    }
+                }
+
+                async function fetchLocation({ forceRefresh = false } = {}) {
+                    if (isFetching && !forceRefresh) return;
+
+                    stopBackgroundWatch();
+                    geocodeSeq += 1;
+                    isFetching = true;
+                    isLocationReady = false;
+                    isLocationDenied = false;
+                    locInput.value = '';
+                    setStatusStyle('loading');
+                    icon.textContent = '⏳';
+                    statusText.textContent = 'Acquiring exact GPS location...';
+                    if (refreshBtn) refreshBtn.disabled = true;
+
+                    if (!window.GeoLocationHelper || !navigator.geolocation) {
+                        isFetching = false;
+                        isLocationDenied = true;
+                        setStatusStyle('error');
                         icon.textContent = '❌';
                         statusText.textContent = 'Geolocation not supported by browser';
-                        if (onError) onError();
+                        if (refreshBtn) refreshBtn.disabled = false;
+                        pendingSubmit = false;
+                        resetSubmitButton();
                         return;
                     }
 
-                    navigator.geolocation.getCurrentPosition(
-                        async function (pos) {
-                            const lat = pos.coords.latitude;
-                            const lng = pos.coords.longitude;
-                            statusText.textContent = 'Location detected. Resolving address...';
+                    try {
+                        const pos = await window.GeoLocationHelper.getExactPosition({
+                            targetAccuracyMeters: 30,
+                            settleWindowMs: 4000,
+                            maxWaitMs: 12000,
+                            onProgress: function (bestSoFar) {
+                                if (!isLocationReady && bestSoFar && bestSoFar.coords && Number.isFinite(bestSoFar.coords.accuracy)) {
+                                    statusText.textContent = `Refining exact GPS location (±${Math.round(bestSoFar.coords.accuracy)}m)...`;
+                                }
+                            }
+                        });
 
-                            const locName = await getReverseGeocode(lat, lng);
-                            locInput.value = locName;
-                            isLocationReady = true;
-                            isLocationDenied = false;
+                        await applyResolvedPosition(pos);
+                        isFetching = false;
+                        if (refreshBtn) refreshBtn.disabled = false;
 
-                            statusBox.style.background = 'rgba(34, 197, 94, 0.1)';
-                            statusBox.style.borderColor = 'rgba(34, 197, 94, 0.3)';
-                            statusBox.style.color = '#16a34a';
-                            icon.textContent = '📍';
-                            statusText.textContent = `Location Verified: ${locName}`;
+                        // Continue refining silently in the background if initial fix is still coarse (> 30m)
+                        stopBackgroundWatch = window.GeoLocationHelper.watchForBetterPosition(pos, {
+                            targetAccuracyMeters: 25,
+                            durationMs: 25000,
+                            onBetterPosition: function (betterPos) {
+                                applyResolvedPosition(betterPos);
+                            }
+                        });
 
-                            if (onSuccess) onSuccess();
-                        },
-                        function (err) {
-                            isLocationReady = false;
+                        if (pendingSubmit) {
+                            pendingSubmit = false;
+                            stopBackgroundWatch();
+                            if (form.checkValidity()) {
+                                form.submit();
+                            } else {
+                                resetSubmitButton();
+                                form.reportValidity();
+                            }
+                        }
+                    } catch (err) {
+                        isFetching = false;
+                        isLocationReady = false;
+                        locInput.value = '';
+                        if (refreshBtn) refreshBtn.disabled = false;
+                        setStatusStyle('error');
+                        icon.textContent = '⚠️';
+
+                        const code = err && err.code;
+                        if (code === 'INSECURE_CONTEXT') {
                             isLocationDenied = true;
-                            locInput.value = '';
-                            statusBox.style.background = 'rgba(239, 68, 68, 0.1)';
-                            statusBox.style.borderColor = 'rgba(239, 68, 68, 0.3)';
-                            statusBox.style.color = '#dc2626';
-                            icon.textContent = '⚠️';
-                            statusText.textContent = 'Location Access Denied! Click "Sign In" or allow location to retry.';
-                            if (onError) onError(err);
-                        },
-                        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-                    );
+                            statusText.textContent = 'Exact geolocation requires HTTPS or localhost.';
+                        } else if (code === 1) {
+                            isLocationDenied = true;
+                            statusText.textContent = 'Location Access Denied! Allow location permission and click Refresh.';
+                        } else {
+                            isLocationDenied = false;
+                            statusText.textContent = 'Unable to get GPS lock (timed out). Click Refresh or Sign In to retry.';
+                        }
+
+                        if (pendingSubmit) {
+                            pendingSubmit = false;
+                            resetSubmitButton();
+                            if (isLocationDenied) {
+                                openLoginPermissionModal(
+                                    code === 'INSECURE_CONTEXT'
+                                        ? 'Browser geolocation requires HTTPS or localhost to detect your exact location.'
+                                        : 'Location permission is required to sign in. Please allow location access and retry.'
+                                );
+                            }
+                        }
+                    }
                 }
 
-                // Initial request on page load
+                if (refreshBtn) {
+                    refreshBtn.addEventListener('click', function () {
+                        fetchLocation({ forceRefresh: true });
+                    });
+                }
+
+                // Initial high-precision location request on page load
                 fetchLocation();
 
-                // Form submit handler - block login if location permission is declined or not ready
+                // Form submit handler - block login if location is denied or not ready
                 form.addEventListener('submit', function (e) {
-                    if (!isLocationReady || isLocationDenied || !locInput.value) {
-                        e.preventDefault();
-                        if (isLocationDenied) {
-                            if (typeof showModal === 'function') {
-                                showModal('locationPermissionModal');
-                            } else {
-                                const m = document.getElementById('locationPermissionModal');
-                                if (m) m.classList.add('active');
-                            }
-                        } else {
-                            statusText.textContent = 'Requesting location... Please allow location access when prompted.';
+                    if (isLocationReady && !isLocationDenied && locInput.value) {
+                        stopBackgroundWatch();
+                        return;
+                    }
+
+                    e.preventDefault();
+                    if (isLocationDenied) {
+                        openLoginPermissionModal('Location permission is required to sign in. Please allow location access and retry.');
+                    } else {
+                        pendingSubmit = true;
+                        if (submitBtn) {
+                            submitBtn.disabled = true;
+                            submitBtn.textContent = 'Acquiring Exact Location...';
+                        }
+                        if (!isFetching) {
                             fetchLocation();
                         }
                     }

@@ -2349,6 +2349,18 @@ body {
     white-space: nowrap;
 }
 
+.location-chip-link {
+    text-decoration: none;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.location-chip-link:hover {
+    border-color: #7dd3fc;
+    background: #f0f9ff;
+    color: #0369a1;
+}
+
 .duration-pill {
     display: inline-flex;
     align-items: center;

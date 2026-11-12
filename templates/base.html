@@ -321,6 +321,7 @@
         <main class="main-content fade-in">
     {% endif %}
 
+            <script src="{{ url_for('static', filename='location.js') }}?v=1.0.0"></script>
             {% block content %}{% endblock %}
 
     {% if session.user_id and session.role == 'admin' %}
@@ -341,33 +342,28 @@
         </footer>
     {% endif %}
 
+    <script>
+        window.locationModalRetryHandler = null;
+        function setLocationModalMessage(msg) {
+            const msgEl = document.getElementById('location-modal-message');
+            if (msgEl && msg) {
+                msgEl.textContent = msg;
+            }
+        }
+        function handleLocationModalRetry() {
+            if (typeof window.locationModalRetryHandler === 'function') {
+                window.locationModalRetryHandler();
+            } else if (typeof retryLogoutLocation === 'function') {
+                retryLogoutLocation();
+            }
+        }
+    </script>
+
     {% if session.user_id %}
     <script>
-        async function getReverseGeocodeLogout(lat, lng) {
-            try {
-                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=14`, {
-                    headers: { 'Accept-Language': 'en' }
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    const addr = data.address || {};
-                    const area = addr.suburb || addr.neighbourhood || addr.city_district || addr.town || addr.village || addr.city || '';
-                    const city = addr.city || addr.town || addr.state_district || addr.county || '';
-                    const state = addr.state || '';
-                    let parts = [area, city, state].filter(Boolean);
-                    if (parts.length > 0) {
-                        return parts.join(', ');
-                    }
-                }
-            } catch(e) {
-                console.log("Reverse geocode fallback", e);
-            }
-            return `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
-        }
-
         let pendingLogoutUrl = '';
 
-        function handleLogoutWithLocation(e, logoutUrl) {
+        async function handleLogoutWithLocation(e, logoutUrl) {
             e.preventDefault();
             pendingLogoutUrl = logoutUrl;
 
@@ -383,7 +379,7 @@
                 return;
             }
 
-            if (!navigator.geolocation) {
+            if (!window.GeoLocationHelper || !navigator.geolocation) {
                 alert('Location Access Error: Browser does not support geolocation.');
                 return;
             }
@@ -392,61 +388,71 @@
             const btn = e.currentTarget;
             const originalText = btn ? btn.innerHTML : '';
             if (btn) {
-                btn.innerHTML = '⏳ Fetching Location...';
+                btn.innerHTML = '⏳ Fetching Exact Location...';
                 btn.style.pointerEvents = 'none';
             }
 
-            navigator.geolocation.getCurrentPosition(
-                async function(pos) {
-                    const lat = pos.coords.latitude;
-                    const lng = pos.coords.longitude;
-                    const locName = await getReverseGeocodeLogout(lat, lng);
-                    if (typeof closeModal === 'function') closeModal('locationPermissionModal');
-                    window.location.href = logoutUrl + '?location=' + encodeURIComponent(locName);
-                },
-                function(err) {
-                    if (btn) {
-                        btn.innerHTML = originalText;
-                        btn.style.pointerEvents = 'auto';
-                    }
-                    if (typeof showModal === 'function') {
-                        showModal('locationPermissionModal');
-                    } else {
-                        const m = document.getElementById('locationPermissionModal');
-                        if (m) m.classList.add('active');
-                    }
-                },
-                { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
-            );
+            try {
+                const result = await window.GeoLocationHelper.captureExactLocation({
+                    targetAccuracyMeters: 30,
+                    settleWindowMs: 3500,
+                    maxWaitMs: 12000
+                });
+                if (typeof closeModal === 'function') closeModal('locationPermissionModal');
+                window.location.href = logoutUrl + '?location=' + encodeURIComponent(result.locationText);
+            } catch (err) {
+                if (btn) {
+                    btn.innerHTML = originalText;
+                    btn.style.pointerEvents = 'auto';
+                }
+                window.locationModalRetryHandler = retryLogoutLocation;
+                setLocationModalMessage(
+                    err && err.code === 'INSECURE_CONTEXT'
+                        ? 'Location requires a secure HTTPS (or localhost) connection to record your shift end.'
+                        : 'Location permission is required to record your shift end and log out. Please allow location access to proceed.'
+                );
+                if (typeof showModal === 'function') {
+                    showModal('locationPermissionModal');
+                } else {
+                    const m = document.getElementById('locationPermissionModal');
+                    if (m) m.classList.add('active');
+                }
+            }
         }
 
-        function retryLogoutLocation() {
+        async function retryLogoutLocation() {
             const retryBtn = document.getElementById('location-modal-retry-btn');
             if (retryBtn) {
-                retryBtn.innerHTML = '⏳ Requesting Location...';
+                retryBtn.innerHTML = '⏳ Requesting Exact Location...';
                 retryBtn.disabled = true;
             }
-            if (!navigator.geolocation) {
+            if (!window.GeoLocationHelper || !navigator.geolocation) {
                 alert('Geolocation not supported by this browser.');
+                if (retryBtn) {
+                    retryBtn.innerHTML = '📍 Allow Location & Retry';
+                    retryBtn.disabled = false;
+                }
                 return;
             }
-            navigator.geolocation.getCurrentPosition(
-                async function(pos) {
-                    const lat = pos.coords.latitude;
-                    const lng = pos.coords.longitude;
-                    const locName = await getReverseGeocodeLogout(lat, lng);
-                    if (typeof closeModal === 'function') closeModal('locationPermissionModal');
-                    window.location.href = (pendingLogoutUrl || '/logout') + '?location=' + encodeURIComponent(locName);
-                },
-                function(err) {
-                    if (retryBtn) {
-                        retryBtn.innerHTML = '📍 Allow Location & Retry';
-                        retryBtn.disabled = false;
-                    }
+            try {
+                const result = await window.GeoLocationHelper.captureExactLocation({
+                    targetAccuracyMeters: 30,
+                    settleWindowMs: 3500,
+                    maxWaitMs: 12000
+                });
+                if (typeof closeModal === 'function') closeModal('locationPermissionModal');
+                window.location.href = (pendingLogoutUrl || '/logout') + '?location=' + encodeURIComponent(result.locationText);
+            } catch (err) {
+                if (retryBtn) {
+                    retryBtn.innerHTML = '📍 Allow Location & Retry';
+                    retryBtn.disabled = false;
+                }
+                if (err && err.code === 1) {
                     alert('Location access is still blocked. Please click the Lock icon 🔒 next to the web address URL in your browser, set Location to "Allow", and try again.');
-                },
-                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-            );
+                } else {
+                    alert('Unable to acquire GPS/network location right now. Please ensure device Location/GPS is turned on and try again.');
+                }
+            }
         }
     </script>
     {% endif %}
@@ -458,7 +464,7 @@
                 📍
             </div>
             <h3 style="margin-bottom: 0.5rem; font-size: 1.25rem; font-weight: 700; color: var(--gray-900);">Location Access Required</h3>
-            <p style="font-size: 0.9rem; color: var(--gray-600); margin-bottom: 1.25rem; line-height: 1.5;">
+            <p id="location-modal-message" style="font-size: 0.9rem; color: var(--gray-600); margin-bottom: 1.25rem; line-height: 1.5;">
                 Location permission is required to record your shift end and log out. Please allow location access to proceed.
             </p>
             
@@ -472,7 +478,7 @@
             </div>
 
             <div style="display: flex; gap: 10px; flex-direction: column;">
-                <button type="button" id="location-modal-retry-btn" class="btn btn-primary btn-full" style="padding: 10px 0; font-weight: 600;" onclick="retryLogoutLocation()">
+                <button type="button" id="location-modal-retry-btn" class="btn btn-primary btn-full" style="padding: 10px 0; font-weight: 600;" onclick="handleLocationModalRetry()">
                     📍 Allow Location & Retry
                 </button>
                 <button type="button" class="btn btn-ghost btn-full" style="padding: 8px 0; font-weight: 500;" onclick="closeModal('locationPermissionModal')">

@@ -631,6 +631,16 @@
                         </span>
                     </td>
                     <td>
+                        {% set login_map_url = (att['login_location'] or '')|location_map_url %}
+                        {% if login_map_url %}
+                        <a href="{{ login_map_url }}" target="_blank" rel="noopener noreferrer" class="location-chip location-chip-link" title="{{ att['login_location'] }} — Open exact pin in Google Maps">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0284c7" stroke-width="2">
+                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                <circle cx="12" cy="10" r="3"></circle>
+                            </svg>
+                            <span>{{ att['login_location'] }}</span>
+                        </a>
+                        {% else %}
                         <div class="location-chip" title="{{ att['login_location'] or 'N/A' }}">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2">
                                 <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
@@ -638,6 +648,7 @@
                             </svg>
                             <span>{{ att['login_location'] or 'N/A' }}</span>
                         </div>
+                        {% endif %}
                     </td>
                     <td>
                         {% if att['is_leave'] or 'On Leave' in att['status'] %}
@@ -658,6 +669,16 @@
                         {% endif %}
                     </td>
                     <td>
+                        {% set logout_map_url = (att['logout_location'] or '')|location_map_url %}
+                        {% if logout_map_url %}
+                        <a href="{{ logout_map_url }}" target="_blank" rel="noopener noreferrer" class="location-chip location-chip-link" title="{{ att['logout_location'] }} — Open exact pin in Google Maps">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0284c7" stroke-width="2">
+                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                <circle cx="12" cy="10" r="3"></circle>
+                            </svg>
+                            <span>{{ att['logout_location'] }}</span>
+                        </a>
+                        {% else %}
                         <div class="location-chip" title="{{ att['logout_location'] or ('Active Session' if att['status'] == 'Active' else 'N/A') }}">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2">
                                 <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
@@ -665,6 +686,7 @@
                             </svg>
                             <span>{{ att['logout_location'] or ('Active Session' if att['status'] == 'Active' else 'N/A') }}</span>
                         </div>
+                        {% endif %}
                     </td>
                     <td>
                         <span class="duration-pill">
