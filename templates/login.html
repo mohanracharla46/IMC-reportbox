@@ -2,6 +2,11 @@
 
 {% block title %}Login - Work Report System{% endblock %}
 
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+{% endblock %}
+
 {% block content %}
 <div class="auth-container">
     <div class="auth-card">
@@ -28,13 +33,25 @@
                 <input type="password" id="password" name="password" class="form-input" placeholder="••••••••" required>
             </div>
 
+            <!-- Live GPS Map Preview (Zomato/Swiggy-style live location lock) -->
+            <div id="live-map-wrapper" class="live-map-wrapper" style="display: none;">
+                <div id="live-map" class="live-map-canvas"></div>
+                <div id="live-gps-badge" class="live-gps-badge">
+                    <span class="live-dot"></span>
+                    <span id="live-gps-badge-text">Refining Live GPS...</span>
+                </div>
+                <button type="button" id="map-recenter-btn" class="live-map-recenter-btn" title="Re-center & refresh live GPS">
+                    🎯 Live GPS
+                </button>
+            </div>
+
             <!-- Mandatory Location Status Box -->
             <div id="location-status-box"
                 style="margin-bottom: 1.25rem; padding: 0.85rem 1rem; border-radius: 12px; font-size: 0.85rem; display: flex; align-items: center; gap: 10px; background: #fffbeb; border: 1px solid #fde68a; color: #b45309; font-weight: 500; transition: all 0.3s ease;">
                 <span id="location-icon"
                     style="display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">⏳</span>
-                <span id="location-status-text" style="flex: 1; line-height: 1.35;">Acquiring exact GPS location...</span>
-                <button type="button" id="location-refresh-btn" title="Refresh exact GPS location"
+                <span id="location-status-text" style="flex: 1; line-height: 1.35;">Detecting live GPS location...</span>
+                <button type="button" id="location-refresh-btn" title="Refresh live GPS location"
                     style="flex-shrink: 0; background: transparent; border: 1px solid currentColor; color: inherit; border-radius: 8px; padding: 3px 8px; font-size: 0.75rem; font-weight: 600; cursor: pointer; opacity: 0.85;">
                     ↻ Refresh
                 </button>
@@ -69,15 +86,27 @@
                 const statusText = document.getElementById('location-status-text');
                 const icon = document.getElementById('location-icon');
                 const refreshBtn = document.getElementById('location-refresh-btn');
+                const mapRecenterBtn = document.getElementById('map-recenter-btn');
+                const mapWrapper = document.getElementById('live-map-wrapper');
+                const gpsBadge = document.getElementById('live-gps-badge');
+                const gpsBadgeText = document.getElementById('live-gps-badge-text');
                 const submitBtn = document.getElementById('submit-btn');
                 const defaultSubmitHtml = submitBtn ? submitBtn.innerHTML : '';
 
                 let isLocationReady = false;
                 let isLocationDenied = false;
-                let isFetching = false;
+                let isWatching = false;
+                let isGeocodingInFlight = false;
+                let closeModalOnNextFix = false;
                 let pendingSubmit = false;
                 let geocodeSeq = 0;
-                let stopBackgroundWatch = function () {};
+                let activeGeocodePromise = null;
+                let lastGeocoded = null;
+                let liveWatcher = null;
+
+                let liveMap = null;
+                let liveMarker = null;
+                let liveCircle = null;
 
                 function setStatusStyle(type) {
                     if (type === 'loading') {
@@ -102,30 +131,160 @@
                     }
                 }
 
-                async function applyResolvedPosition(pos) {
-                    const seq = ++geocodeSeq;
+                function updateLiveMap(lat, lng, accuracy) {
+                    if (typeof L === 'undefined' || !mapWrapper) return;
+                    mapWrapper.style.display = 'block';
+
+                    const zoom = accuracy !== null
+                        ? (accuracy <= 45 ? 18 : (accuracy <= 250 ? 16 : 14))
+                        : 17;
+
+                    if (!liveMap) {
+                        liveMap = L.map('live-map', {
+                            zoomControl: false,
+                            attributionControl: false
+                        }).setView([lat, lng], zoom);
+
+                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                            maxZoom: 19
+                        }).addTo(liveMap);
+
+                        const dotIcon = L.divIcon({
+                            className: '',
+                            html: '<div class="live-gps-marker"></div>',
+                            iconSize: [18, 18],
+                            iconAnchor: [9, 9]
+                        });
+
+                        liveCircle = L.circle([lat, lng], {
+                            radius: accuracy || 25,
+                            color: '#2563eb',
+                            fillColor: '#3b82f6',
+                            fillOpacity: 0.16,
+                            weight: 1.5
+                        }).addTo(liveMap);
+
+                        liveMarker = L.marker([lat, lng], { icon: dotIcon }).addTo(liveMap);
+                        setTimeout(function () {
+                            if (liveMap) liveMap.invalidateSize();
+                        }, 100);
+                    } else {
+                        liveMarker.setLatLng([lat, lng]);
+                        if (accuracy !== null) {
+                            liveCircle.setLatLng([lat, lng]);
+                            liveCircle.setRadius(Math.max(accuracy, 8));
+                        }
+                        liveMap.setView([lat, lng], zoom, { animate: true });
+                    }
+
+                    if (gpsBadge && gpsBadgeText) {
+                        const isExact = accuracy !== null && accuracy <= 35;
+                        gpsBadge.classList.toggle('is-exact', isExact);
+                        if (accuracy === null) {
+                            gpsBadgeText.textContent = 'LIVE GPS';
+                        } else if (isExact) {
+                            gpsBadgeText.textContent = `LIVE GPS • ±${accuracy}m`;
+                        } else {
+                            gpsBadgeText.textContent = `Refining GPS • ±${accuracy}m`;
+                        }
+                    }
+                }
+
+                function shouldRegeocode(lat, lng, accuracy) {
+                    if (!lastGeocoded) return true;
+                    const moved = window.GeoLocationHelper.haversineMeters(
+                        lastGeocoded.lat,
+                        lastGeocoded.lng,
+                        lat,
+                        lng
+                    );
+                    if (moved >= 12) return true;
+                    const elapsed = Date.now() - lastGeocoded.at;
+                    if (elapsed >= 2500 && accuracy !== null && lastGeocoded.accuracy !== null && accuracy < lastGeocoded.accuracy * 0.65) {
+                        return true;
+                    }
+                    return false;
+                }
+
+                function completePendingSubmitIfReady() {
+                    if (!pendingSubmit || !isLocationReady || !locInput.value) return;
+                    pendingSubmit = false;
+                    if (liveWatcher) liveWatcher.stop();
+                    if (form.checkValidity()) {
+                        form.submit();
+                    } else {
+                        resetSubmitButton();
+                        form.reportValidity();
+                    }
+                }
+
+                async function handleLivePosition(pos) {
                     const lat = pos.coords.latitude;
                     const lng = pos.coords.longitude;
                     const accuracy = Number.isFinite(pos.coords.accuracy) ? Math.round(pos.coords.accuracy) : null;
 
-                    if (!isLocationReady) {
-                        statusText.textContent = accuracy !== null
-                            ? `Coordinates locked (±${accuracy}m). Resolving exact address...`
-                            : 'Coordinates locked. Resolving exact address...';
+                    updateLiveMap(lat, lng, accuracy);
+
+                    if (!shouldRegeocode(lat, lng, accuracy)) {
+                        if (isLocationReady && accuracy !== null) {
+                            const labelPrefix = accuracy <= 35 ? 'Live GPS Verified' : 'Approximate Location (refining GPS...)';
+                            statusText.textContent = `${labelPrefix} (±${accuracy}m): ${locInput.value}`;
+                        }
+                        return;
                     }
 
-                    const locName = await window.GeoLocationHelper.reverseGeocodeExact(lat, lng);
-                    if (seq !== geocodeSeq) return;
+                    lastGeocoded = { lat, lng, accuracy, at: Date.now() };
+                    const seq = ++geocodeSeq;
+                    isGeocodingInFlight = true;
 
-                    locInput.value = locName;
-                    isLocationReady = true;
-                    isLocationDenied = false;
+                    if (!isLocationReady) {
+                        statusText.textContent = accuracy !== null
+                            ? `Live coordinates locked (±${accuracy}m). Resolving exact street...`
+                            : 'Live coordinates locked. Resolving exact street...';
+                    }
 
-                    setStatusStyle('success');
-                    icon.textContent = '📍';
-                    statusText.textContent = accuracy !== null
-                        ? `Location Verified (±${accuracy}m): ${locName}`
-                        : `Location Verified: ${locName}`;
+                    const resolvePromise = (async () => {
+                        try {
+                            const locName = await window.GeoLocationHelper.reverseGeocodeExact(lat, lng);
+                            if (seq !== geocodeSeq) return;
+
+                            locInput.value = locName;
+                            isLocationReady = true;
+                            isLocationDenied = false;
+
+                            if (accuracy !== null && accuracy > 150) {
+                                setStatusStyle('loading');
+                                icon.textContent = '📡';
+                                statusText.textContent = `Approximate (±${accuracy}m — refining live GPS): ${locName}`;
+                            } else {
+                                setStatusStyle('success');
+                                icon.textContent = '📍';
+                                statusText.textContent = accuracy !== null
+                                    ? `Live GPS Verified (±${accuracy}m): ${locName}`
+                                    : `Live GPS Verified: ${locName}`;
+                            }
+
+                            if (closeModalOnNextFix) {
+                                closeModalOnNextFix = false;
+                                const retryBtn = document.getElementById('location-modal-retry-btn');
+                                if (retryBtn) {
+                                    retryBtn.innerHTML = '📍 Allow Location & Retry';
+                                    retryBtn.disabled = false;
+                                }
+                                if (typeof closeModal === 'function') {
+                                    closeModal('locationPermissionModal');
+                                }
+                            }
+                            completePendingSubmitIfReady();
+                        } finally {
+                            if (seq === geocodeSeq) {
+                                isGeocodingInFlight = false;
+                            }
+                        }
+                    })();
+
+                    activeGeocodePromise = resolvePromise;
+                    await resolvePromise;
                 }
 
                 function openLoginPermissionModal(message) {
@@ -134,20 +293,14 @@
                             message || 'Location permission is required to sign in. Please allow location access and retry.'
                         );
                     }
-                    window.locationModalRetryHandler = async function () {
+                    window.locationModalRetryHandler = function () {
                         const retryBtn = document.getElementById('location-modal-retry-btn');
                         if (retryBtn) {
-                            retryBtn.innerHTML = '⏳ Requesting Exact Location...';
+                            retryBtn.innerHTML = '⏳ Starting Live GPS...';
                             retryBtn.disabled = true;
                         }
-                        await fetchLocation({ forceRefresh: true });
-                        if (retryBtn) {
-                            retryBtn.innerHTML = '📍 Allow Location & Retry';
-                            retryBtn.disabled = false;
-                        }
-                        if (isLocationReady && typeof closeModal === 'function') {
-                            closeModal('locationPermissionModal');
-                        }
+                        closeModalOnNextFix = true;
+                        startLiveTracking({ forceRestart: true });
                     };
                     if (typeof showModal === 'function') {
                         showModal('locationPermissionModal');
@@ -157,130 +310,126 @@
                     }
                 }
 
-                async function fetchLocation({ forceRefresh = false } = {}) {
-                    if (isFetching && !forceRefresh) return;
+                function startLiveTracking({ forceRestart = false } = {}) {
+                    if (isWatching && !forceRestart) return;
 
-                    stopBackgroundWatch();
+                    if (liveWatcher) {
+                        liveWatcher.stop();
+                        liveWatcher = null;
+                    }
+
                     geocodeSeq += 1;
-                    isFetching = true;
+                    lastGeocoded = null;
+                    activeGeocodePromise = null;
+                    isWatching = true;
                     isLocationReady = false;
                     isLocationDenied = false;
                     locInput.value = '';
                     setStatusStyle('loading');
                     icon.textContent = '⏳';
-                    statusText.textContent = 'Acquiring exact GPS location...';
-                    if (refreshBtn) refreshBtn.disabled = true;
+                    statusText.textContent = 'Detecting live GPS location...';
 
                     if (!window.GeoLocationHelper || !navigator.geolocation) {
-                        isFetching = false;
+                        isWatching = false;
                         isLocationDenied = true;
                         setStatusStyle('error');
                         icon.textContent = '❌';
                         statusText.textContent = 'Geolocation not supported by browser';
-                        if (refreshBtn) refreshBtn.disabled = false;
                         pendingSubmit = false;
                         resetSubmitButton();
                         return;
                     }
 
-                    try {
-                        const pos = await window.GeoLocationHelper.getExactPosition({
-                            targetAccuracyMeters: 30,
-                            settleWindowMs: 4000,
-                            maxWaitMs: 12000,
-                            onProgress: function (bestSoFar) {
-                                if (!isLocationReady && bestSoFar && bestSoFar.coords && Number.isFinite(bestSoFar.coords.accuracy)) {
-                                    statusText.textContent = `Refining exact GPS location (±${Math.round(bestSoFar.coords.accuracy)}m)...`;
+                    liveWatcher = window.GeoLocationHelper.startLiveLocationWatch({
+                        settlePreviewMs: 1200,
+                        onUpdate: function (pos) {
+                            handleLivePosition(pos);
+                        },
+                        onError: function (err) {
+                            isWatching = false;
+                            isLocationReady = false;
+                            isGeocodingInFlight = false;
+                            closeModalOnNextFix = false;
+                            const retryBtn = document.getElementById('location-modal-retry-btn');
+                            if (retryBtn) {
+                                retryBtn.innerHTML = '📍 Allow Location & Retry';
+                                retryBtn.disabled = false;
+                            }
+                            locInput.value = '';
+                            if (mapWrapper) mapWrapper.style.display = 'none';
+                            setStatusStyle('error');
+                            icon.textContent = '⚠️';
+
+                            const code = err && err.code;
+                            if (code === 'INSECURE_CONTEXT') {
+                                isLocationDenied = true;
+                                statusText.textContent = 'Live geolocation requires HTTPS or localhost.';
+                            } else if (code === 1) {
+                                isLocationDenied = true;
+                                statusText.textContent = 'Location Access Denied! Allow location permission and click Refresh.';
+                            } else {
+                                isLocationDenied = false;
+                                statusText.textContent = 'Unable to get live GPS signal. Enable Device Location & click Refresh.';
+                            }
+
+                            if (pendingSubmit) {
+                                pendingSubmit = false;
+                                resetSubmitButton();
+                                if (isLocationDenied) {
+                                    openLoginPermissionModal(
+                                        code === 'INSECURE_CONTEXT'
+                                            ? 'Browser geolocation requires HTTPS or localhost to detect your live location.'
+                                            : 'Location permission is required to sign in. Please allow location access and retry.'
+                                    );
                                 }
                             }
-                        });
-
-                        await applyResolvedPosition(pos);
-                        isFetching = false;
-                        if (refreshBtn) refreshBtn.disabled = false;
-
-                        // Continue refining silently in the background if initial fix is still coarse (> 30m)
-                        stopBackgroundWatch = window.GeoLocationHelper.watchForBetterPosition(pos, {
-                            targetAccuracyMeters: 25,
-                            durationMs: 25000,
-                            onBetterPosition: function (betterPos) {
-                                applyResolvedPosition(betterPos);
-                            }
-                        });
-
-                        if (pendingSubmit) {
-                            pendingSubmit = false;
-                            stopBackgroundWatch();
-                            if (form.checkValidity()) {
-                                form.submit();
-                            } else {
-                                resetSubmitButton();
-                                form.reportValidity();
-                            }
                         }
-                    } catch (err) {
-                        isFetching = false;
-                        isLocationReady = false;
-                        locInput.value = '';
-                        if (refreshBtn) refreshBtn.disabled = false;
-                        setStatusStyle('error');
-                        icon.textContent = '⚠️';
-
-                        const code = err && err.code;
-                        if (code === 'INSECURE_CONTEXT') {
-                            isLocationDenied = true;
-                            statusText.textContent = 'Exact geolocation requires HTTPS or localhost.';
-                        } else if (code === 1) {
-                            isLocationDenied = true;
-                            statusText.textContent = 'Location Access Denied! Allow location permission and click Refresh.';
-                        } else {
-                            isLocationDenied = false;
-                            statusText.textContent = 'Unable to get GPS lock (timed out). Click Refresh or Sign In to retry.';
-                        }
-
-                        if (pendingSubmit) {
-                            pendingSubmit = false;
-                            resetSubmitButton();
-                            if (isLocationDenied) {
-                                openLoginPermissionModal(
-                                    code === 'INSECURE_CONTEXT'
-                                        ? 'Browser geolocation requires HTTPS or localhost to detect your exact location.'
-                                        : 'Location permission is required to sign in. Please allow location access and retry.'
-                                );
-                            }
-                        }
-                    }
+                    });
                 }
 
                 if (refreshBtn) {
                     refreshBtn.addEventListener('click', function () {
-                        fetchLocation({ forceRefresh: true });
+                        startLiveTracking({ forceRestart: true });
+                    });
+                }
+                if (mapRecenterBtn) {
+                    mapRecenterBtn.addEventListener('click', function () {
+                        startLiveTracking({ forceRestart: true });
                     });
                 }
 
-                // Initial high-precision location request on page load
-                fetchLocation();
+                window.addEventListener('beforeunload', function () {
+                    if (liveWatcher) liveWatcher.stop();
+                });
 
-                // Form submit handler - block login if location is denied or not ready
-                form.addEventListener('submit', function (e) {
-                    if (isLocationReady && !isLocationDenied && locInput.value) {
-                        stopBackgroundWatch();
+                // Start live Zomato/Swiggy-style location watch on page load
+                startLiveTracking();
+
+                // Form submit handler - ensure live location is locked and address resolved
+                form.addEventListener('submit', async function (e) {
+                    if (isLocationDenied) {
+                        e.preventDefault();
+                        openLoginPermissionModal('Location permission is required to sign in. Please allow location access and retry.');
                         return;
                     }
 
-                    e.preventDefault();
-                    if (isLocationDenied) {
-                        openLoginPermissionModal('Location permission is required to sign in. Please allow location access and retry.');
-                    } else {
+                    if (!isLocationReady || isGeocodingInFlight || !locInput.value) {
+                        e.preventDefault();
                         pendingSubmit = true;
                         if (submitBtn) {
                             submitBtn.disabled = true;
-                            submitBtn.textContent = 'Acquiring Exact Location...';
+                            submitBtn.textContent = 'Locking Live GPS...';
                         }
-                        if (!isFetching) {
-                            fetchLocation();
+                        if (activeGeocodePromise) {
+                            await activeGeocodePromise;
+                            completePendingSubmitIfReady();
+                        } else if (!isWatching) {
+                            startLiveTracking({ forceRestart: true });
                         }
+                        return;
                     }
+
+                    if (liveWatcher) liveWatcher.stop();
                 });
             });
         </script>

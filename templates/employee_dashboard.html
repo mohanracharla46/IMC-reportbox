@@ -89,8 +89,15 @@
                                     --:--
                                 {% endif %}
                             </div>
+                            {% set today_login_map_url = (today_attendance.login_location if today_attendance else '')|location_map_url %}
                             <div style="font-size: 0.68rem; color: #cbd5e1; margin-top: 2px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="{{ today_attendance.login_location if today_attendance else '' }}">
+                                {% if today_login_map_url %}
+                                <a href="{{ today_login_map_url }}" target="_blank" rel="noopener noreferrer" style="color: #7dd3fc; text-decoration: none;" title="{{ today_attendance.login_location }} — Open exact pin in Google Maps">
+                                    📍 {{ today_attendance.login_location }}
+                                </a>
+                                {% else %}
                                 📍 {{ today_attendance.login_location if (today_attendance and today_attendance.login_location) else 'No location' }}
+                                {% endif %}
                             </div>
                         </div>
                         <div>
@@ -108,8 +115,15 @@
                                     --:--
                                 {% endif %}
                             </div>
+                            {% set today_logout_map_url = (today_attendance.logout_location if today_attendance else '')|location_map_url %}
                             <div style="font-size: 0.68rem; color: #cbd5e1; margin-top: 2px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="{{ today_attendance.logout_location if today_attendance else '' }}">
+                                {% if today_logout_map_url %}
+                                <a href="{{ today_logout_map_url }}" target="_blank" rel="noopener noreferrer" style="color: #7dd3fc; text-decoration: none;" title="{{ today_attendance.logout_location }} — Open exact pin in Google Maps">
+                                    📍 {{ today_attendance.logout_location }}
+                                </a>
+                                {% else %}
                                 📍 {{ today_attendance.logout_location if (today_attendance and today_attendance.logout_location) else 'Pending' }}
+                                {% endif %}
                             </div>
                         </div>
                         <div>

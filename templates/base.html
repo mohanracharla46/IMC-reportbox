@@ -321,7 +321,7 @@
         <main class="main-content fade-in">
     {% endif %}
 
-            <script src="{{ url_for('static', filename='location.js') }}?v=1.0.0"></script>
+            <script src="{{ url_for('static', filename='location.js') }}?v=1.1.0"></script>
             {% block content %}{% endblock %}
 
     {% if session.user_id and session.role == 'admin' %}
@@ -394,9 +394,15 @@
 
             try {
                 const result = await window.GeoLocationHelper.captureExactLocation({
-                    targetAccuracyMeters: 30,
-                    settleWindowMs: 3500,
-                    maxWaitMs: 12000
+                    targetAccuracyMeters: 20,
+                    minWarmupMs: 1200,
+                    settleWindowMs: 5500,
+                    maxWaitMs: 14000,
+                    onProgress: function (pos) {
+                        if (btn && pos && pos.coords && Number.isFinite(pos.coords.accuracy)) {
+                            btn.innerHTML = `⏳ Live GPS (±${Math.round(pos.coords.accuracy)}m)...`;
+                        }
+                    }
                 });
                 if (typeof closeModal === 'function') closeModal('locationPermissionModal');
                 window.location.href = logoutUrl + '?location=' + encodeURIComponent(result.locationText);
@@ -436,9 +442,15 @@
             }
             try {
                 const result = await window.GeoLocationHelper.captureExactLocation({
-                    targetAccuracyMeters: 30,
-                    settleWindowMs: 3500,
-                    maxWaitMs: 12000
+                    targetAccuracyMeters: 20,
+                    minWarmupMs: 1200,
+                    settleWindowMs: 5500,
+                    maxWaitMs: 14000,
+                    onProgress: function (pos) {
+                        if (retryBtn && pos && pos.coords && Number.isFinite(pos.coords.accuracy)) {
+                            retryBtn.innerHTML = `⏳ Live GPS (±${Math.round(pos.coords.accuracy)}m)...`;
+                        }
+                    }
                 });
                 if (typeof closeModal === 'function') closeModal('locationPermissionModal');
                 window.location.href = (pendingLogoutUrl || '/logout') + '?location=' + encodeURIComponent(result.locationText);

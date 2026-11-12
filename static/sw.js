@@ -4,14 +4,14 @@
  * - Never caches API responses, auth endpoints, exports, or private HTML pages.
  */
 
-const CACHE_VERSION = 'ira-pwa-v5';
+const CACHE_VERSION = 'ira-pwa-v6';
 const STATIC_CACHE = `ira-static-${CACHE_VERSION}`;
 const OFFLINE_URL = '/offline';
 
 const PRECACHE_ASSETS = [
     '/static/style.css',
     '/static/script.js?v=1.0.5',
-    '/static/location.js?v=1.0.0',
+    '/static/location.js?v=1.1.0',
     '/static/pwa.js?v=1.0.0',
     '/static/images/logo.png',
     '/static/images/icon-192.png',
